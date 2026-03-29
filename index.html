@@ -1,1 +1,627 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>Test Avto WebApp</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      padding: 16px;
+      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
+      background: #0f172a;
+      color: #e5e7eb;
+    }
+    h1 { margin: 0 0 6px; font-size: 22px; text-align: center; }
+    .subtitle { text-align: center; color: #94a3b8; margin-bottom: 16px; font-size: 13px; }
+    .card {
+      max-width: 680px;
+      margin: 0 auto;
+      background: #111827;
+      border-radius: 18px;
+      padding: 18px;
+      box-shadow: 0 10px 30px rgba(0,0,0,.35);
+    }
+    .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
+    label { color: #cbd5e1; font-size: 13px; }
+    input, select, textarea {
+      width: 100%;
+      border-radius: 12px;
+      border: 1px solid #334155;
+      background: #020617;
+      color: #e5e7eb;
+      padding: 10px 12px;
+      font-size: 14px;
+      outline: none;
+    }
+    textarea { min-height: 90px; resize: vertical; }
+    .hint { color: #94a3b8; font-size: 12px; line-height: 1.35; margin-top: 3px; }
+    .hidden { display: none; }
+    button {
+      width: 100%;
+      padding: 12px 14px;
+      border: 0;
+      border-radius: 999px;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      cursor: pointer;
+      margin-top: 14px;
+    }
+    .error {
+      display: none;
+      max-width: 680px;
+      margin: 12px auto 0;
+      background: #2b0f16;
+      border: 1px solid #ef4444;
+      color: #fecaca;
+      border-radius: 14px;
+      padding: 10px 12px;
+      white-space: pre-line;
+    }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #172554;
+      color: #dbeafe;
+      font-size: 12px;
+      margin-bottom: 10px;
+    }
+    .req { color: #fca5a5; margin-left: 5px; }
+  </style>
+</head>
+<body>
+  <h1>Test Avto</h1>
+  <div class="subtitle" id="subtitle"></div>
+  <div class="card" id="formCard"></div>
+  <button id="submitBtn">Отправить</button>
+  <div class="error" id="errorBox"></div>
 
+<script>
+  const tg = window.Telegram?.WebApp || null;
+  try { tg?.ready(); tg?.expand(); } catch(e) {}
+
+  const params = new URLSearchParams(window.location.search);
+  const formType = params.get("type") || "";
+
+  const managers = (params.get("managers") || "").split("|").filter(Boolean);
+  const sources = (params.get("sources") || "").split("|").filter(Boolean);
+  const owners = (params.get("owners") || "").split("|").filter(Boolean);
+  const brands = (params.get("brands") || "").split("|").filter(Boolean);
+  const expenseArticles = (params.get("expense_articles") || "").split("|").filter(Boolean);
+  const incomeArticles = (params.get("income_articles") || "").split("|").filter(Boolean);
+
+  const subtitle = document.getElementById("subtitle");
+  const formCard = document.getElementById("formCard");
+  const submitBtn = document.getElementById("submitBtn");
+  const errorBox = document.getElementById("errorBox");
+
+  const TITLES = {
+    mgr_stock: "Сток",
+    sale_main: "Продажа",
+    sale_deposit: "Задаток",
+    deposit_status: "Статус задатка",
+    sale_extra: "Доп. услуги",
+    fin_auto_template: "Расходы авто РФ",
+    fin_company: "Расходы компании",
+    fin_other_income: "Прочие доходы",
+    refs_manage: "Справочники",
+    record_edit: "Исправление записи"
+  };
+
+  subtitle.textContent = "Форма: " + (TITLES[formType] || formType);
+
+  function showError(msg) {
+    if (!msg) {
+      errorBox.style.display = "none";
+      errorBox.textContent = "";
+      return;
+    }
+    errorBox.textContent = msg;
+    errorBox.style.display = "block";
+  }
+
+  function todayISO() {
+    return new Date().toISOString().slice(0, 10);
+  }
+
+  function toRuDate(val) {
+    if (!val) return "";
+    const p = val.split("-");
+    if (p.length === 3) return `${p[2]}.${p[1]}.${p[0]}`;
+    return val;
+  }
+
+  function el(tag, attrs = {}, html = "") {
+    const n = document.createElement(tag);
+    Object.entries(attrs).forEach(([k,v]) => {
+      if (k === "class") n.className = v;
+      else if (k === "for") n.htmlFor = v;
+      else n.setAttribute(k, v);
+    });
+    if (html) n.innerHTML = html;
+    return n;
+  }
+
+  function fieldWrap() {
+    return el("div", {class: "field"});
+  }
+
+  function addInput(id, labelText, type = "text", value = "", required = false, placeholder = "") {
+    const w = fieldWrap();
+    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
+    const inp = el("input", {id, type, placeholder});
+    if (value) inp.value = value;
+    if (required) inp.dataset.required = "1";
+    w.appendChild(lab);
+    w.appendChild(inp);
+    formCard.appendChild(w);
+    return inp;
+  }
+
+  function addTextarea(id, labelText, required = false, placeholder = "") {
+    const w = fieldWrap();
+    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
+    const t = el("textarea", {id, placeholder});
+    if (required) t.dataset.required = "1";
+    w.appendChild(lab);
+    w.appendChild(t);
+    formCard.appendChild(w);
+    return t;
+  }
+
+  function addSelect(id, labelText, items = [], required = false, placeholder = "Выберите...") {
+    const w = fieldWrap();
+    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
+    const s = el("select", {id});
+    const ph = el("option", {value: "", disabled: "true", selected: "true"});
+    ph.textContent = placeholder;
+    s.appendChild(ph);
+
+    items.forEach(v => {
+      const o = el("option", {value: v});
+      o.textContent = v;
+      s.appendChild(o);
+    });
+
+    if (required) s.dataset.required = "1";
+    w.appendChild(lab);
+    w.appendChild(s);
+    formCard.appendChild(w);
+    return s;
+  }
+
+  function addSelectKV(id, labelText, items = [], required = false, placeholder = "Выберите...") {
+    const w = fieldWrap();
+    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
+    const s = el("select", {id});
+    const ph = el("option", {value: "", disabled: "true", selected: "true"});
+    ph.textContent = placeholder;
+    s.appendChild(ph);
+
+    items.forEach(x => {
+      const o = el("option", {value: x.value});
+      o.textContent = x.label;
+      s.appendChild(o);
+    });
+
+    if (required) s.dataset.required = "1";
+    w.appendChild(lab);
+    w.appendChild(s);
+    formCard.appendChild(w);
+    return s;
+  }
+
+  function validateRequired() {
+    const nodes = formCard.querySelectorAll("[data-required='1']");
+    const miss = [];
+    nodes.forEach(n => {
+      if (!String(n.value || "").trim()) {
+        const lab = formCard.querySelector(`label[for="${n.id}"]`);
+        miss.push(lab ? lab.textContent.replace("*", "").trim() : n.id);
+      }
+    });
+    if (miss.length) {
+      showError("Заполни обязательные поля:\n• " + miss.join("\n• "));
+      return false;
+    }
+    showError("");
+    return true;
+  }
+
+  function getVal(id) {
+    return document.getElementById(id)?.value?.trim() || "";
+  }
+
+  function renderForm() {
+    formCard.innerHTML = "";
+    showError("");
+
+    const badge = el("div", {class: "pill"});
+    badge.textContent = TITLES[formType] || formType;
+    formCard.appendChild(badge);
+
+    if (formType === "mgr_stock") {
+      addSelectKV("deal_type", "Тип сделки", [
+        {value:"Склад", label:"Склад"},
+        {value:"Поставка", label:"Поставка"}
+      ], true);
+
+      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
+      addSelect("owner", "Собственник", owners, true, "Выбери собственника");
+      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
+      addInput("vin", "VIN", "text", "", true);
+      addInput("complectation", "Комплектация", "text", "", true);
+      addInput("body_color", "Цвет кузова", "text", "", true);
+      addInput("salon_color", "Цвет салона", "text", "", true);
+      addInput("price", "Цена", "text", "", true);
+      addInput("stock_date", "Дата", "date", todayISO(), true);
+      addSelectKV("payment_type", "Тип оплаты", [
+        {value:"Нал", label:"Нал"},
+        {value:"Безнал", label:"Безнал"},
+        {value:"НДС", label:"НДС"}
+      ], true);
+      addInput("client", "Клиент", "text", "", true);
+      return;
+    }
+
+    if (formType === "sale_main") {
+      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
+      addSelect("owner", "Собственник", owners, true, "Выбери собственника");
+      addInput("sale_date", "Дата продажи", "date", todayISO(), true);
+      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
+      addInput("vin", "VIN", "text", "", true);
+      addSelect("source", "Источник", sources, true, "Выбери источник");
+
+      addSelectKV("payment_mode", "Оплата", [
+        {value:"cash", label:"Нал"},
+        {value:"cashless", label:"Безнал"}
+      ], true);
+
+      addSelectKV("vat_mode", "НДС", [
+        {value:"yes", label:"С НДС"},
+        {value:"no", label:"Без НДС"}
+      ], true);
+
+      addSelectKV("broker_mode", "Брокер", [
+        {value:"yes", label:"Есть"},
+        {value:"no", label:"Нет"}
+      ], true);
+
+      addInput("buyer", "Покупатель", "text", "", false);
+      addInput("receiver", "Получатель", "text", "", false);
+      addInput("price", "Цена", "text", "", true);
+      addInput("price_no_commission", "Цена без комиссии", "text");
+      addInput("contract_price", "Сумма договора", "text");
+      addInput("broker_price", "Цена без комиссии брокера", "text");
+      addInput("broker_expense", "Комиссия брокера", "text");
+      addInput("markup_nds", "Наценка НДС", "text");
+      addInput("price_no_vat_cash", "Цена без НДС за наличные", "text");
+      return;
+    }
+
+    if (formType === "sale_deposit") {
+      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
+      addInput("sale_date", "Дата", "date", todayISO(), true);
+      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
+      addInput("vin", "VIN", "text", "", true);
+      addSelect("source", "Источник", sources, true, "Выбери источник");
+      addInput("deposit_sum", "Сумма задатка", "text", "", true);
+      addInput("receiver", "Кому передана сумма", "text", "", true);
+      addInput("price", "Цена продажи", "text", "", true);
+      addInput("buyer", "Покупатель", "text", "", false);
+      return;
+    }
+
+    if (formType === "deposit_status") {
+      addInput("record_id", "ID записи задатка", "text", "", true, "Например: sale_deposit_ab12cd34");
+      addSelectKV("status", "Новый статус", [
+        {value:"Зачтён", label:"✅ Зачтён"},
+        {value:"Возврат", label:"↩️ Возврат"},
+        {value:"Сгорел", label:"🔥 Сгорел"}
+      ], true);
+      return;
+    }
+
+    if (formType === "sale_extra") {
+      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
+      addInput("sale_date", "Дата", "date", todayISO(), true);
+      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
+      addInput("vin", "VIN", "text", "", true);
+      addTextarea("extra_desc", "Описание доп. услуг", false);
+      addInput("price", "Цена продажи", "text", "", true);
+      addInput("receiver", "Кому передали средства", "text", "", true);
+      addInput("purchaser", "Кто выдал средства на закупку", "text", "", true);
+      addInput("buy_price", "Цена покупки", "text", "", true);
+      addInput("profit", "Доход", "text", "", true);
+      return;
+    }
+
+    if (formType === "fin_auto_template") {
+      addInput("vin", "VIN", "text", "", false);
+      addSelect("brand_model", "Марка / Модель", brands, false, "Выбери модель");
+      addInput("op_date", "Дата", "date", todayISO(), true);
+      addInput("evacuator", "Эвакуатор", "text");
+      addInput("lab", "Лаборатория", "text");
+      addInput("util_writeoff", "Списания утильсбора", "text");
+      addInput("util", "Утильсбор", "text");
+      addInput("pre_sale", "Предпродажная подготовка", "text");
+      addInput("marketing", "Маркетинг", "text");
+      addInput("other", "Прочие расходы", "text");
+      addTextarea("extra_expenses", "Доп. расходы");
+      addTextarea("comment", "Комментарий");
+      return;
+    }
+
+    if (formType === "fin_company") {
+      addInput("op_date", "Дата", "date", todayISO(), true);
+      addSelect("expense_article", "Статья расхода", expenseArticles, true, "Выбери статью");
+      addInput("amount", "Сумма", "text", "", true);
+      addTextarea("comment", "Комментарий");
+      return;
+    }
+
+    if (formType === "fin_other_income") {
+      addInput("op_date", "Дата", "date", todayISO(), true);
+      addSelect("income_article", "Статья дохода", incomeArticles, true, "Выбери статью");
+      addInput("amount", "Сумма", "text", "", true);
+      addTextarea("comment", "Комментарий");
+      return;
+    }
+
+    if (formType === "refs_manage") {
+      addSelectKV("ref_type", "Тип справочника", [
+        {value:"manager", label:"Менеджер"},
+        {value:"source", label:"Источник"},
+        {value:"owner", label:"Собственник"},
+        {value:"brand_model", label:"Марка / Модель"},
+        {value:"expense_article", label:"Статья расхода"},
+        {value:"income_article", label:"Статья дохода"}
+      ], true);
+      addInput("value", "Новое значение", "text", "", true);
+      return;
+    }
+
+    if (formType === "record_edit") {
+      addSelectKV("sheet_name", "Лист", [
+        {value:"Сток", label:"Сток"},
+        {value:"Продажи", label:"Продажи"},
+        {value:"Задаток", label:"Задаток"},
+        {value:"Доп услуги", label:"Доп услуги"},
+        {value:"Расходы авто РФ", label:"Расходы авто РФ"},
+        {value:"Расходы компании", label:"Расходы компании"},
+        {value:"Прочие доходы", label:"Прочие доходы"}
+      ], true);
+
+      addInput("record_id", "ID записи", "text", "", true);
+      addTextarea("edit_help", "Что можно править", false, "Заполняй ниже только те поля, которые нужно изменить");
+
+      addInput("manager", "Менеджер", "text");
+      addInput("owner", "Собственник", "text");
+      addInput("sale_date", "Дата продажи", "date");
+      addInput("stock_date", "Дата стока", "date");
+      addInput("op_date", "Дата операции", "date");
+      addInput("brand_model", "Марка / Модель", "text");
+      addInput("vin", "VIN", "text");
+      addInput("source", "Источник", "text");
+      addInput("buyer", "Покупатель", "text");
+      addInput("receiver", "Получатель", "text");
+      addInput("price", "Цена", "text");
+      addInput("deposit_sum", "Сумма задатка", "text");
+      addInput("status", "Статус", "text");
+      addInput("amount", "Сумма", "text");
+      addInput("expense_article", "Статья расхода", "text");
+      addInput("income_article", "Статья дохода", "text");
+      addTextarea("comment", "Комментарий");
+      return;
+    }
+
+    formCard.innerHTML = "<div class='hint'>Форма не найдена.</div>";
+  }
+
+  function collectPayload() {
+    if (formType === "refs_manage") {
+      return {
+        action: "add_reference",
+        formType,
+        ref_type: getVal("ref_type"),
+        value: getVal("value")
+      };
+    }
+
+    if (formType === "record_edit") {
+      return {
+        action: "update_record",
+        formType,
+        sheet_name: getVal("sheet_name"),
+        record_id: getVal("record_id"),
+        manager: getVal("manager"),
+        owner: getVal("owner"),
+        sale_date: getVal("sale_date") ? toRuDate(getVal("sale_date")) : "",
+        stock_date: getVal("stock_date") ? toRuDate(getVal("stock_date")) : "",
+        op_date: getVal("op_date") ? toRuDate(getVal("op_date")) : "",
+        brand_model: getVal("brand_model"),
+        vin: getVal("vin"),
+        source: getVal("source"),
+        buyer: getVal("buyer"),
+        receiver: getVal("receiver"),
+        price: getVal("price"),
+        deposit_sum: getVal("deposit_sum"),
+        status: getVal("status"),
+        amount: getVal("amount"),
+        expense_article: getVal("expense_article"),
+        income_article: getVal("income_article"),
+        comment: getVal("comment")
+      };
+    }
+
+    if (formType === "deposit_status") {
+      return {
+        action: "create",
+        formType,
+        record_id: getVal("record_id"),
+        status: getVal("status")
+      };
+    }
+
+    if (formType === "mgr_stock") {
+      return {
+        action: "create",
+        formType,
+        deal_type: getVal("deal_type"),
+        manager: getVal("manager"),
+        owner: getVal("owner"),
+        brand_model: getVal("brand_model"),
+        vin: getVal("vin"),
+        complectation: getVal("complectation"),
+        body_color: getVal("body_color"),
+        salon_color: getVal("salon_color"),
+        price: getVal("price"),
+        stock_date: toRuDate(getVal("stock_date")),
+        payment_type: getVal("payment_type"),
+        client: getVal("client")
+      };
+    }
+
+    if (formType === "sale_main") {
+      return {
+        action: "create",
+        formType,
+        manager: getVal("manager"),
+        owner: getVal("owner"),
+        sale_date: toRuDate(getVal("sale_date")),
+        brand_model: getVal("brand_model"),
+        vin: getVal("vin"),
+        source: getVal("source"),
+        payment_mode: getVal("payment_mode"),
+        vat_mode: getVal("vat_mode"),
+        broker_mode: getVal("broker_mode"),
+        buyer: getVal("buyer"),
+        receiver: getVal("receiver"),
+        price: getVal("price"),
+        price_no_commission: getVal("price_no_commission"),
+        contract_price: getVal("contract_price"),
+        broker_price: getVal("broker_price"),
+        broker_expense: getVal("broker_expense"),
+        markup_nds: getVal("markup_nds"),
+        price_no_vat_cash: getVal("price_no_vat_cash")
+      };
+    }
+
+    if (formType === "sale_deposit") {
+      return {
+        action: "create",
+        formType,
+        manager: getVal("manager"),
+        sale_date: toRuDate(getVal("sale_date")),
+        brand_model: getVal("brand_model"),
+        vin: getVal("vin"),
+        source: getVal("source"),
+        deposit_sum: getVal("deposit_sum"),
+        receiver: getVal("receiver"),
+        buyer: getVal("buyer"),
+        price: getVal("price")
+      };
+    }
+
+    if (formType === "sale_extra") {
+      return {
+        action: "create",
+        formType,
+        manager: getVal("manager"),
+        sale_date: toRuDate(getVal("sale_date")),
+        brand_model: getVal("brand_model"),
+        vin: getVal("vin"),
+        extra_desc: getVal("extra_desc"),
+        price: getVal("price"),
+        receiver: getVal("receiver"),
+        purchaser: getVal("purchaser"),
+        buy_price: getVal("buy_price"),
+        profit: getVal("profit")
+      };
+    }
+
+    if (formType === "fin_auto_template") {
+      return {
+        action: "create",
+        formType,
+        vin: getVal("vin"),
+        brand_model: getVal("brand_model"),
+        op_date: toRuDate(getVal("op_date")),
+        evacuator: getVal("evacuator"),
+        lab: getVal("lab"),
+        util_writeoff: getVal("util_writeoff"),
+        util: getVal("util"),
+        pre_sale: getVal("pre_sale"),
+        marketing: getVal("marketing"),
+        other: getVal("other"),
+        extra_expenses: getVal("extra_expenses"),
+        comment: getVal("comment")
+      };
+    }
+
+    if (formType === "fin_company") {
+      return {
+        action: "create",
+        formType,
+        op_date: toRuDate(getVal("op_date")),
+        expense_article: getVal("expense_article"),
+        amount: getVal("amount"),
+        comment: getVal("comment")
+      };
+    }
+
+    if (formType === "fin_other_income") {
+      return {
+        action: "create",
+        formType,
+        op_date: toRuDate(getVal("op_date")),
+        income_article: getVal("income_article"),
+        amount: getVal("amount"),
+        comment: getVal("comment")
+      };
+    }
+
+    return { action: "create", formType };
+  }
+
+  submitBtn.addEventListener("click", () => {
+    showError("");
+    if (!validateRequired()) return;
+
+    if (!tg) {
+      showError("Открой форму через Telegram-бота.");
+      return;
+    }
+
+    const payload = collectPayload();
+    const str = JSON.stringify(payload);
+
+    if (str.length > 3800) {
+      showError("Слишком много данных для отправки.");
+      return;
+    }
+
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Отправка...";
+
+    try {
+      tg.sendData(str);
+      setTimeout(() => {
+        try { tg.close(); } catch(e){}
+      }, 400);
+    } catch (e) {
+      submitBtn.disabled = false;
+      submitBtn.textContent = "Отправить";
+      showError("Не удалось отправить данные.");
+    }
+  });
+
+  renderForm();
+</script>
+</body>
+</html>
