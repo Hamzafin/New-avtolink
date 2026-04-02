@@ -17,7 +17,7 @@
     h1 { margin: 0 0 6px; font-size: 22px; text-align: center; }
     .subtitle { text-align: center; color: #94a3b8; margin-bottom: 16px; font-size: 13px; }
     .card {
-      max-width: 680px;
+      max-width: 760px;
       margin: 0 auto;
       background: #111827;
       border-radius: 18px;
@@ -36,9 +36,8 @@
       font-size: 14px;
       outline: none;
     }
-    textarea { min-height: 90px; resize: vertical; }
+    textarea { min-height: 100px; resize: vertical; }
     .hint { color: #94a3b8; font-size: 12px; line-height: 1.35; margin-top: 3px; }
-    .hidden { display: none; }
     button {
       width: 100%;
       padding: 12px 14px;
@@ -53,7 +52,7 @@
     }
     .error {
       display: none;
-      max-width: 680px;
+      max-width: 760px;
       margin: 12px auto 0;
       background: #2b0f16;
       border: 1px solid #ef4444;
@@ -72,6 +71,14 @@
       margin-bottom: 10px;
     }
     .req { color: #fca5a5; margin-left: 5px; }
+    .row2 {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    @media (max-width: 680px) {
+      .row2 { grid-template-columns: 1fr; }
+    }
   </style>
 </head>
 <body>
@@ -110,6 +117,7 @@
     fin_company: "Расходы компании",
     fin_other_income: "Прочие доходы",
     refs_manage: "Справочники",
+    record_find: "Поиск записи",
     record_edit: "Исправление записи"
   };
 
@@ -138,7 +146,7 @@
 
   function el(tag, attrs = {}, html = "") {
     const n = document.createElement(tag);
-    Object.entries(attrs).forEach(([k,v]) => {
+    Object.entries(attrs).forEach(([k, v]) => {
       if (k === "class") n.className = v;
       else if (k === "for") n.htmlFor = v;
       else n.setAttribute(k, v);
@@ -214,6 +222,12 @@
     w.appendChild(s);
     formCard.appendChild(w);
     return s;
+  }
+
+  function addHint(text) {
+    const d = el("div", {class: "hint"});
+    d.textContent = text;
+    formCard.appendChild(d);
   }
 
   function validateRequired() {
@@ -292,8 +306,8 @@
         {value:"no", label:"Нет"}
       ], true);
 
-      addInput("buyer", "Покупатель", "text", "", false);
-      addInput("receiver", "Получатель", "text", "", false);
+      addInput("buyer", "Покупатель", "text");
+      addInput("receiver", "Получатель", "text");
       addInput("price", "Цена", "text", "", true);
       addInput("price_no_commission", "Цена без комиссии", "text");
       addInput("contract_price", "Сумма договора", "text");
@@ -313,7 +327,7 @@
       addInput("deposit_sum", "Сумма задатка", "text", "", true);
       addInput("receiver", "Кому передана сумма", "text", "", true);
       addInput("price", "Цена продажи", "text", "", true);
-      addInput("buyer", "Покупатель", "text", "", false);
+      addInput("buyer", "Покупатель", "text");
       return;
     }
 
@@ -332,7 +346,7 @@
       addInput("sale_date", "Дата", "date", todayISO(), true);
       addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
       addInput("vin", "VIN", "text", "", true);
-      addTextarea("extra_desc", "Описание доп. услуг", false);
+      addTextarea("extra_desc", "Описание доп. услуг");
       addInput("price", "Цена продажи", "text", "", true);
       addInput("receiver", "Кому передали средства", "text", "", true);
       addInput("purchaser", "Кто выдал средства на закупку", "text", "", true);
@@ -342,7 +356,7 @@
     }
 
     if (formType === "fin_auto_template") {
-      addInput("vin", "VIN", "text", "", false);
+      addInput("vin", "VIN", "text");
       addSelect("brand_model", "Марка / Модель", brands, false, "Выбери модель");
       addInput("op_date", "Дата", "date", todayISO(), true);
       addInput("evacuator", "Эвакуатор", "text");
@@ -374,6 +388,12 @@
     }
 
     if (formType === "refs_manage") {
+      addSelectKV("mode", "Режим", [
+        {value:"single", label:"Добавить одно значение"},
+        {value:"bulk", label:"Добавить списком"},
+        {value:"deactivate", label:"Отключить значение"}
+      ], true);
+
       addSelectKV("ref_type", "Тип справочника", [
         {value:"manager", label:"Менеджер"},
         {value:"source", label:"Источник"},
@@ -382,7 +402,29 @@
         {value:"expense_article", label:"Статья расхода"},
         {value:"income_article", label:"Статья дохода"}
       ], true);
-      addInput("value", "Новое значение", "text", "", true);
+
+      addInput("value", "Одно значение", "text");
+      addTextarea("bulk_text", "Список значений", false, "Каждое значение с новой строки или через запятую");
+      addHint("Для массового добавления вставь список строками или через запятую. Для отключения укажи одно точное значение.");
+      return;
+    }
+
+    if (formType === "record_find") {
+      addSelectKV("sheet_name", "Лист", [
+        {value:"Сток", label:"Сток"},
+        {value:"Продажи", label:"Продажи"},
+        {value:"Задаток", label:"Задаток"},
+        {value:"Доп услуги", label:"Доп услуги"},
+        {value:"Расходы авто РФ", label:"Расходы авто РФ"},
+        {value:"Расходы компании", label:"Расходы компании"},
+        {value:"Прочие доходы", label:"Прочие доходы"}
+      ], true);
+
+      addInput("record_id", "ID записи", "text");
+      addInput("vin", "VIN", "text");
+      addInput("buyer", "Покупатель / Клиент / Получатель", "text");
+      addInput("date", "Дата (часть даты тоже можно)", "text", "", false, "Например: 29.03.2026");
+      addHint("Можно заполнить одно или несколько полей. Результат бот пришлёт сообщением в Telegram.");
       return;
     }
 
@@ -398,7 +440,6 @@
       ], true);
 
       addInput("record_id", "ID записи", "text", "", true);
-      addTextarea("edit_help", "Что можно править", false, "Заполняй ниже только те поля, которые нужно изменить");
 
       addInput("manager", "Менеджер", "text");
       addInput("owner", "Собственник", "text");
@@ -417,6 +458,7 @@
       addInput("expense_article", "Статья расхода", "text");
       addInput("income_article", "Статья дохода", "text");
       addTextarea("comment", "Комментарий");
+      addHint("Заполняй только те поля, которые нужно поменять.");
       return;
     }
 
@@ -428,8 +470,22 @@
       return {
         action: "add_reference",
         formType,
+        mode: getVal("mode"),
         ref_type: getVal("ref_type"),
-        value: getVal("value")
+        value: getVal("value"),
+        bulk_text: getVal("bulk_text")
+      };
+    }
+
+    if (formType === "record_find") {
+      return {
+        action: "find_record",
+        formType,
+        sheet_name: getVal("sheet_name"),
+        record_id: getVal("record_id"),
+        vin: getVal("vin"),
+        buyer: getVal("buyer"),
+        date: getVal("date")
       };
     }
 
