@@ -6,108 +6,149 @@
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    * { box-sizing: border-box; }
+    *, *::before, *::after { box-sizing: border-box; }
     body {
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
       padding: 16px;
-      font-family: system-ui, -apple-system, Segoe UI, sans-serif;
       background: #0f172a;
       color: #e5e7eb;
+      min-height: var(--app-height, var(--tg-viewport-height, 100vh));
+      padding-bottom: calc(16px + env(safe-area-inset-bottom));
+      overscroll-behavior: contain;
     }
-    h1 { margin: 0 0 6px; font-size: 22px; text-align: center; }
-    .subtitle { text-align: center; color: #94a3b8; margin-bottom: 16px; font-size: 13px; }
+    h1 { font-size: 20px; margin: 0 0 4px; text-align: center; }
+    .subtitle { font-size: 13px; text-align: center; color: #94a3b8; margin-bottom: 16px; line-height: 1.35; }
     .card {
+      background: #111827;
+      border-radius: 16px;
+      padding: 16px;
+      box-shadow: 0 10px 25px rgba(0,0,0,0.5);
       max-width: 760px;
       margin: 0 auto;
-      background: #111827;
-      border-radius: 18px;
-      padding: 18px;
-      box-shadow: 0 10px 30px rgba(0,0,0,.35);
     }
-    .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 5px; }
-    label { color: #cbd5e1; font-size: 13px; }
+    .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
+    label { font-size: 13px; color: #9ca3af; }
     input, select, textarea {
-      width: 100%;
-      border-radius: 12px;
-      border: 1px solid #334155;
+      border-radius: 10px;
+      border: 1px solid #374151;
+      padding: 8px 10px;
+      font-size: 14px;
       background: #020617;
       color: #e5e7eb;
-      padding: 10px 12px;
-      font-size: 14px;
       outline: none;
-    }
-    textarea { min-height: 100px; resize: vertical; }
-    .hint { color: #94a3b8; font-size: 12px; line-height: 1.35; margin-top: 3px; }
-    button {
       width: 100%;
-      padding: 12px 14px;
-      border: 0;
-      border-radius: 999px;
-      background: linear-gradient(135deg, #38bdf8, #6366f1);
-      color: white;
-      font-size: 15px;
-      font-weight: 700;
-      cursor: pointer;
-      margin-top: 14px;
     }
-    .error {
-      display: none;
-      max-width: 760px;
+    input:focus, select:focus, textarea:focus { border-color: #38bdf8; }
+    textarea { min-height: 90px; resize: vertical; }
+    .readonly { background: #020617; color: #9ca3af; }
+    .hint { font-size: 12px; color: #94a3b8; line-height: 1.35; margin-top: 4px; }
+    .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #0b1226; border: 1px solid #334155; color: #cbd5e1; font-size: 12px; }
+    .divider { height: 1px; background: #1f2937; margin: 14px 0; }
+    .hidden { display:none; }
+    .errorbox{
       margin: 12px auto 0;
-      background: #2b0f16;
-      border: 1px solid #ef4444;
-      color: #fecaca;
+      max-width: 760px;
+      background:#0b1226;
+      border:1px solid #ef4444;
+      color:#fecaca;
       border-radius: 14px;
       padding: 10px 12px;
+      display:none;
+      line-height:1.35;
+      font-size:13px;
       white-space: pre-line;
     }
-    .pill {
-      display: inline-block;
-      padding: 6px 10px;
+    .req{ color:#fca5a5; margin-left:6px; font-weight:600; }
+    button#submitBtn {
+      width: 100%;
       border-radius: 999px;
-      background: #172554;
-      color: #dbeafe;
-      font-size: 12px;
-      margin-bottom: 10px;
+      border: none;
+      padding: 10px 14px;
+      font-size: 15px;
+      font-weight: 600;
+      background: linear-gradient(135deg, #38bdf8, #6366f1);
+      color: white;
+      cursor: pointer;
+      margin-top: 12px;
+      touch-action: manipulation;
     }
-    .req { color: #fca5a5; margin-left: 5px; }
-    .row2 {
-      display: grid;
-      grid-template-columns: 1fr 1fr;
-      gap: 12px;
-    }
-    @media (max-width: 680px) {
-      .row2 { grid-template-columns: 1fr; }
-    }
+    button#submitBtn:disabled { opacity: .5; cursor: default; }
   </style>
 </head>
 <body>
   <h1>Test Avto</h1>
   <div class="subtitle" id="subtitle"></div>
+
   <div class="card" id="formCard"></div>
-  <button id="submitBtn">Отправить</button>
-  <div class="error" id="errorBox"></div>
+  <button id="submitBtn" disabled>Отправить</button>
+  <div class="errorbox" id="errorBox"></div>
 
 <script>
-  const tg = window.Telegram?.WebApp || null;
-  try { tg?.ready(); tg?.expand(); } catch(e) {}
+  // ---------- Telegram ----------
+  const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
+  const urlParams = new URLSearchParams(window.location.search);
+  const formType = urlParams.get("type") || "unknown";
+  const APP_VERSION = urlParams.get("v") || "1";
 
-  const params = new URLSearchParams(window.location.search);
-  const formType = params.get("type") || "";
+  const IS_IOS =
+    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
+    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
 
-  const managers = (params.get("managers") || "").split("|").filter(Boolean);
-  const sources = (params.get("sources") || "").split("|").filter(Boolean);
-  const owners = (params.get("owners") || "").split("|").filter(Boolean);
-  const brands = (params.get("brands") || "").split("|").filter(Boolean);
-  const expenseArticles = (params.get("expense_articles") || "").split("|").filter(Boolean);
-  const incomeArticles = (params.get("income_articles") || "").split("|").filter(Boolean);
+  // ---------- Service Worker ----------
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./sw.js?v=" + encodeURIComponent(APP_VERSION)).catch(() => {});
+    });
+  }
 
-  const subtitle = document.getElementById("subtitle");
+  try { if (tg) { tg.ready(); tg.expand(); } } catch (e) {}
+
+  if (tg) {
+    const setH = () => {
+      document.documentElement.style.setProperty('--app-height', (tg.viewportHeight || window.innerHeight) + 'px');
+    };
+    setH();
+    tg.onEvent('viewportChanged', setH);
+  }
+
+  function tgAlert(text) {
+    try {
+      if (tg && typeof tg.showAlert === "function") tg.showAlert(String(text));
+      else alert(String(text));
+    } catch(e) { alert(String(text)); }
+  }
+
+  const subtitleEl = document.getElementById("subtitle");
   const formCard = document.getElementById("formCard");
   const submitBtn = document.getElementById("submitBtn");
   const errorBox = document.getElementById("errorBox");
 
-  const TITLES = {
+  function showError(msg){
+    if (!msg) { errorBox.style.display="none"; errorBox.textContent=""; return; }
+    errorBox.textContent = msg;
+    errorBox.style.display="block";
+    try { errorBox.scrollIntoView({behavior:"smooth", block:"start"}); } catch(e){}
+  }
+
+  // ---------- URL lists ----------
+  const brandsParam = urlParams.get("brands") || "";
+  const sourcesParam = urlParams.get("sources") || "";
+  const managersParam = urlParams.get("managers") || "";
+  const ownersParam = urlParams.get("owners") || "";
+  const expenseArticlesParam = urlParams.get("expense_articles") || "";
+  const incomeArticlesParam = urlParams.get("income_articles") || "";
+  const vinsParam = urlParams.get("vins") || ""; // на будущее / если добавишь в Python
+
+  const brands = brandsParam ? brandsParam.split("|") : [];
+  const sources = sourcesParam ? sourcesParam.split("|") : [];
+  const managers = managersParam ? managersParam.split("|") : [];
+  const owners = ownersParam ? ownersParam.split("|") : [];
+  const expenseArticles = expenseArticlesParam ? expenseArticlesParam.split("|") : [];
+  const incomeArticles = incomeArticlesParam ? incomeArticlesParam.split("|") : [];
+  const vinsFromUrl = vinsParam ? vinsParam.split("|") : [];
+
+  const FORM_TITLES = {
     mgr_stock: "Сток",
     sale_main: "Продажа",
     sale_deposit: "Задаток",
@@ -118,362 +159,1018 @@
     fin_other_income: "Прочие доходы",
     refs_manage: "Справочники",
     record_find: "Поиск записи",
-    record_edit: "Исправление записи"
+    record_edit: "Исправление записи",
   };
 
-  subtitle.textContent = "Форма: " + (TITLES[formType] || formType);
+  subtitleEl.textContent = "Форма: " + (FORM_TITLES[formType] || formType);
 
-  function showError(msg) {
-    if (!msg) {
-      errorBox.style.display = "none";
-      errorBox.textContent = "";
+  // ---------- helpers ----------
+  function todayISO() { return new Date().toISOString().slice(0, 10); }
+
+  function formatDateToRu(value) {
+    if (!value) return "";
+    const parts = value.split("-");
+    if (parts.length === 3) {
+      const [y, m, d] = parts;
+      return `${d}.${m}.${y}`;
+    }
+    return value;
+  }
+
+  function getRuDate(id) {
+    const el = document.getElementById(id);
+    if (!el) return "";
+    return formatDateToRu(el.value);
+  }
+
+  function showEl(el, show) {
+    if (!el) return;
+    el.classList.toggle("hidden", !show);
+  }
+
+  function safeStr(v){ return (v===null||v===undefined) ? "" : String(v); }
+
+  function normalizeVin(v) {
+    return String(v || "").trim().toUpperCase().replace(/\s+/g,"");
+  }
+
+  function uniq(arr){
+    const out=[]; const seen=new Set();
+    (arr||[]).forEach(x=>{
+      const s=String(x||"").trim();
+      if(!s) return;
+      const k=s.toLowerCase();
+      if(seen.has(k)) return;
+      seen.add(k); out.push(s);
+    });
+    return out;
+  }
+
+  function mergeUnique(...arrays){ return uniq(arrays.flat()); }
+
+  // ---------- localStorage ----------
+  const LS_KEYS = {
+    VINS: "testavto_vins",
+    MANAGER: "testavto_last_manager",
+    SOURCE: "testavto_last_source",
+    OWNER: "testavto_last_owner",
+    EXP_ARTICLE: "testavto_last_exp_article",
+    INCOME_ARTICLE: "testavto_last_income_article",
+    SCHEMA: "testavto_schema_v2"
+  };
+
+  function lsRead(key, fallback){
+    try{
+      const v = localStorage.getItem(key);
+      if (v===null || v===undefined || v==="") return fallback;
+      return JSON.parse(v);
+    }catch(e){ return fallback; }
+  }
+
+  function lsWrite(key, value){
+    try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){}
+  }
+
+  function lsReadArr(key){
+    const a=lsRead(key, []);
+    return Array.isArray(a)?a.filter(Boolean):[];
+  }
+
+  function lsWriteArr(key, arr, max=4000){
+    lsWrite(key, (Array.isArray(arr)?arr:[]).filter(Boolean).slice(0,max));
+  }
+
+  function rememberVin(vin){
+    const v = normalizeVin(vin);
+    if(!v || v.length < 4) return;
+    const cur = lsReadArr(LS_KEYS.VINS);
+    const merged = mergeUnique([v], vinsFromUrl, cur);
+    lsWriteArr(LS_KEYS.VINS, merged, 4000);
+  }
+
+  function getAllVins() {
+    return mergeUnique(vinsFromUrl, lsReadArr(LS_KEYS.VINS)).map(v => normalizeVin(v));
+  }
+
+  // ---------- datalist ----------
+  function updateDatalist(dlId, options) {
+    const dl = document.getElementById(dlId);
+    if (!dl) return;
+    dl.innerHTML = "";
+    (options || []).slice(0, 800).forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = opt;
+      dl.appendChild(o);
+    });
+  }
+
+  function createInput(id, labelText, placeholder = "", value = "", type = "text", readonly = false, required = false) {
+    const w = document.createElement("div");
+    w.className = "field";
+    const l = document.createElement("label");
+    l.htmlFor = id;
+    l.textContent = labelText;
+    if (required) {
+      const r = document.createElement("span");
+      r.className = "req";
+      r.textContent = "*";
+      l.appendChild(r);
+    }
+    const i = document.createElement("input");
+    i.id = id;
+    i.placeholder = placeholder;
+    i.type = type;
+    if (value) i.value = value;
+    if (readonly) { i.readOnly = true; i.classList.add("readonly"); }
+    if (id.toLowerCase().includes("vin")) i.maxLength = 17;
+    if (required) i.dataset.required = "1";
+    w.appendChild(l);
+    w.appendChild(i);
+    return w;
+  }
+
+  function createTextarea(id, labelText, placeholder = "", readonly = false, required = false) {
+    const w = document.createElement("div");
+    w.className = "field";
+    const l = document.createElement("label");
+    l.htmlFor = id;
+    l.textContent = labelText;
+    if (required) {
+      const r = document.createElement("span");
+      r.className = "req";
+      r.textContent = "*";
+      l.appendChild(r);
+    }
+    const t = document.createElement("textarea");
+    t.id = id;
+    t.placeholder = placeholder;
+    if (readonly) { t.readOnly = true; t.classList.add("readonly"); }
+    if (required) t.dataset.required = "1";
+    w.appendChild(l);
+    w.appendChild(t);
+    return w;
+  }
+
+  function createSelectKV(id, labelText, options, placeholder = "Выберите...", required = false) {
+    const w = document.createElement("div");
+    w.className = "field";
+    const l = document.createElement("label");
+    l.htmlFor = id;
+    l.textContent = labelText;
+    if (required) {
+      const r = document.createElement("span");
+      r.className = "req";
+      r.textContent = "*";
+      l.appendChild(r);
+    }
+    const s = document.createElement("select");
+    s.id = id;
+
+    const ph = document.createElement("option");
+    ph.value = "";
+    ph.textContent = placeholder;
+    ph.disabled = true;
+    ph.selected = true;
+    s.appendChild(ph);
+
+    options.forEach((opt) => {
+      const o = document.createElement("option");
+      o.value = opt.value;
+      o.textContent = opt.label;
+      s.appendChild(o);
+    });
+
+    if (required) s.dataset.required = "1";
+
+    w.appendChild(l);
+    w.appendChild(s);
+    return w;
+  }
+
+  function createAutocompleteInput(id, labelText, placeholder = "", options = [], required = false) {
+    const w = document.createElement("div");
+    w.className = "field";
+    const l = document.createElement("label");
+    l.htmlFor = id;
+    l.textContent = labelText;
+    if (required) {
+      const r = document.createElement("span");
+      r.className = "req";
+      r.textContent = "*";
+      l.appendChild(r);
+    }
+    const i = document.createElement("input");
+    i.id = id;
+    i.placeholder = placeholder;
+    const dlId = id + "_list";
+    i.setAttribute("list", dlId);
+
+    let dl = document.getElementById(dlId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = dlId;
+      document.body.appendChild(dl);
+    }
+
+    updateDatalist(dlId, options);
+
+    if (required) i.dataset.required = "1";
+    w.appendChild(l);
+    w.appendChild(i);
+    return w;
+  }
+
+  // ---------- money formatting ----------
+  function digitsOnly(s){ return String(s||"").replace(/[^\d]/g, ""); }
+
+  function normalizeMoneyString(raw) {
+    let s = String(raw || "").trim();
+    if (!s) return "";
+    s = s.replace(/\s+/g, "");
+    s = s.replace(/[^\d,.\-]/g, "");
+    if (!s) return "";
+
+    const isNegative = s.startsWith("-");
+    s = s.replace(/\-/g, "");
+    if (isNegative) s = "-" + s;
+    if (s === "-") return "-";
+
+    const lastComma = s.lastIndexOf(",");
+    const lastDot = s.lastIndexOf(".");
+    const sepIndex = Math.max(lastComma, lastDot);
+
+    let intPart = s;
+    let fracPart = "";
+    let hasSeparator = false;
+
+    if (sepIndex !== -1) {
+      hasSeparator = true;
+      intPart = s.slice(0, sepIndex);
+      fracPart = s.slice(sepIndex + 1).replace(/[^\d]/g, "");
+    }
+
+    const negative = intPart.startsWith("-");
+    intPart = intPart.replace(/[^\d]/g, "");
+
+    if (!intPart && hasSeparator) intPart = "0";
+    if (!intPart && !fracPart) return negative ? "-" : "";
+
+    intPart = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, " ");
+
+    let result = (negative ? "-" : "") + intPart;
+    if (hasSeparator) result += "," + fracPart;
+
+    return result;
+  }
+
+  function formatWithSpaces(numStr){
+    return normalizeMoneyString(numStr);
+  }
+
+  function setupMoneyInput(id){
+    const el = document.getElementById(id);
+    if (!el || el.dataset.money === "1") return;
+    el.dataset.money = "1";
+
+    const formatNow = () => {
+      const raw = el.value;
+      const formatted = formatWithSpaces(raw);
+      el.value = (formatted === "-" ? "" : formatted);
+    };
+
+    if (IS_IOS) {
+      el.addEventListener("blur", formatNow);
       return;
     }
-    errorBox.textContent = msg;
-    errorBox.style.display = "block";
-  }
 
-  function todayISO() {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  function toRuDate(val) {
-    if (!val) return "";
-    const p = val.split("-");
-    if (p.length === 3) return `${p[2]}.${p[1]}.${p[0]}`;
-    return val;
-  }
-
-  function el(tag, attrs = {}, html = "") {
-    const n = document.createElement(tag);
-    Object.entries(attrs).forEach(([k, v]) => {
-      if (k === "class") n.className = v;
-      else if (k === "for") n.htmlFor = v;
-      else n.setAttribute(k, v);
-    });
-    if (html) n.innerHTML = html;
-    return n;
-  }
-
-  function fieldWrap() {
-    return el("div", {class: "field"});
-  }
-
-  function addInput(id, labelText, type = "text", value = "", required = false, placeholder = "") {
-    const w = fieldWrap();
-    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
-    const inp = el("input", {id, type, placeholder});
-    if (value) inp.value = value;
-    if (required) inp.dataset.required = "1";
-    w.appendChild(lab);
-    w.appendChild(inp);
-    formCard.appendChild(w);
-    return inp;
-  }
-
-  function addTextarea(id, labelText, required = false, placeholder = "") {
-    const w = fieldWrap();
-    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
-    const t = el("textarea", {id, placeholder});
-    if (required) t.dataset.required = "1";
-    w.appendChild(lab);
-    w.appendChild(t);
-    formCard.appendChild(w);
-    return t;
-  }
-
-  function addSelect(id, labelText, items = [], required = false, placeholder = "Выберите...") {
-    const w = fieldWrap();
-    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
-    const s = el("select", {id});
-    const ph = el("option", {value: "", disabled: "true", selected: "true"});
-    ph.textContent = placeholder;
-    s.appendChild(ph);
-
-    items.forEach(v => {
-      const o = el("option", {value: v});
-      o.textContent = v;
-      s.appendChild(o);
-    });
-
-    if (required) s.dataset.required = "1";
-    w.appendChild(lab);
-    w.appendChild(s);
-    formCard.appendChild(w);
-    return s;
-  }
-
-  function addSelectKV(id, labelText, items = [], required = false, placeholder = "Выберите...") {
-    const w = fieldWrap();
-    const lab = el("label", {for: id}, labelText + (required ? '<span class="req">*</span>' : ''));
-    const s = el("select", {id});
-    const ph = el("option", {value: "", disabled: "true", selected: "true"});
-    ph.textContent = placeholder;
-    s.appendChild(ph);
-
-    items.forEach(x => {
-      const o = el("option", {value: x.value});
-      o.textContent = x.label;
-      s.appendChild(o);
-    });
-
-    if (required) s.dataset.required = "1";
-    w.appendChild(lab);
-    w.appendChild(s);
-    formCard.appendChild(w);
-    return s;
-  }
-
-  function addHint(text) {
-    const d = el("div", {class: "hint"});
-    d.textContent = text;
-    formCard.appendChild(d);
-  }
-
-  function validateRequired() {
-    const nodes = formCard.querySelectorAll("[data-required='1']");
-    const miss = [];
-    nodes.forEach(n => {
-      if (!String(n.value || "").trim()) {
-        const lab = formCard.querySelector(`label[for="${n.id}"]`);
-        miss.push(lab ? lab.textContent.replace("*", "").trim() : n.id);
+    const onInput = () => {
+      const raw = el.value;
+      if (!String(raw || "").trim()) {
+        el.value = "";
+        return;
       }
+
+      const start = el.selectionStart || 0;
+      const beforeDigits = digitsOnly(raw.slice(0, start)).length;
+
+      const formatted = formatWithSpaces(raw);
+      el.value = (formatted === "-" ? "" : formatted);
+
+      let pos = 0;
+      let seenDigits = 0;
+      while (pos < el.value.length && seenDigits < beforeDigits) {
+        if (/\d/.test(el.value[pos])) seenDigits++;
+        pos++;
+      }
+      try { el.setSelectionRange(pos, pos); } catch(e){}
+    };
+
+    el.addEventListener("input", onInput);
+    el.addEventListener("blur", formatNow);
+  }
+
+  // ---------- VIN autocomplete ----------
+  function setupVinAutocompleteSmart(inputId, getAllVinsFn) {
+    const input = document.getElementById(inputId);
+    if (!input) return;
+    if (input.dataset && input.dataset.vinAuto === "1") return;
+    input.dataset.vinAuto = "1";
+
+    const listId = inputId + "_list";
+    let dl = document.getElementById(listId);
+    if (!dl) {
+      dl = document.createElement("datalist");
+      dl.id = listId;
+      document.body.appendChild(dl);
+    }
+    input.setAttribute("list", listId);
+
+    function fill(filter = "") {
+      const raw = String(filter || "").trim();
+      if (!raw) return;
+      const onlyDigits = /^[0-9]+$/.test(raw);
+      if (!onlyDigits && raw.length < 2) return;
+      const f = raw.toLowerCase();
+
+      dl.innerHTML = "";
+      const source = (typeof getAllVinsFn === "function") ? getAllVinsFn() : [];
+      const out = [];
+
+      for (let i = 0; i < source.length; i++) {
+        const v = normalizeVin(source[i]);
+        if (!v) continue;
+        if (v.toLowerCase().includes(f)) out.push(v);
+        if (out.length >= 80) break;
+      }
+
+      out.forEach(v => {
+        const o = document.createElement("option");
+        o.value = v;
+        dl.appendChild(o);
+      });
+    }
+
+    input.addEventListener("focus", () => fill(input.value));
+    input.addEventListener("input", () => fill(input.value));
+    input.addEventListener("change", ()=>rememberVin(input.value));
+    input.addEventListener("blur", ()=>rememberVin(input.value));
+  }
+
+  // ---------- validation ----------
+  function isFieldHidden(el){
+    if (!el) return true;
+    const field = el.closest(".field");
+    if (!field) return false;
+    return field.classList.contains("hidden");
+  }
+
+  function labelFor(el){
+    if (!el || !el.id) return el?.id || "поле";
+    const lab = formCard.querySelector(`label[for="${el.id}"]`);
+    if (!lab) return el.id;
+    return lab.textContent.replace("*","").trim();
+  }
+
+  function validateVisibleRequired(optionalIds = []) {
+    const opt = new Set(optionalIds || []);
+    const missing = [];
+    const controls = formCard.querySelectorAll("input, select, textarea");
+
+    controls.forEach(el=>{
+      if (!el.id) return;
+      if (opt.has(el.id)) return;
+      const requiredFlag = el.dataset.required === "1";
+      if (!requiredFlag) return;
+      if (isFieldHidden(el)) return;
+      const v = (el.value || "").trim();
+      if (!v) missing.push(labelFor(el));
     });
-    if (miss.length) {
-      showError("Заполни обязательные поля:\n• " + miss.join("\n• "));
+
+    if (missing.length) {
+      showError("Заполни обязательные поля:\n• " + missing.join("\n• "));
       return false;
     }
     showError("");
     return true;
   }
 
-  function getVal(id) {
-    return document.getElementById(id)?.value?.trim() || "";
+  function validateSaleScenario(){
+    if (formType !== "sale_main") return true;
+
+    const payment = document.getElementById("salePaymentTypeInput")?.value || "";
+    const commission = (document.getElementById("saleCommissionInput")?.value || "no") === "yes";
+    const vatYes = (document.getElementById("saleVatInput")?.value || "no") === "yes";
+    const vat = (payment === "cashless") && vatYes;
+
+    const mustHave = [];
+    if (payment === "cash") {
+      mustHave.push("priceCashInput");
+      if (commission) mustHave.push("priceCashNoCommInput");
+    } else if (payment === "cashless") {
+      if (vat) {
+        mustHave.push("priceNdsInput");
+        mustHave.push("markupNdsInput");
+        mustHave.push("priceNoVatCashInput");
+      } else {
+        mustHave.push("priceCashlessInput");
+      }
+      if (commission) {
+        mustHave.push("contractPriceInput");
+        mustHave.push("brokerPriceInput");
+        mustHave.push("brokerExpenseInput");
+      }
+    }
+
+    const missing = [];
+    mustHave.forEach(id=>{
+      const el = document.getElementById(id);
+      if (!el) return;
+      if (isFieldHidden(el)) return;
+      if (!(el.value||"").trim()) missing.push(labelFor(el));
+    });
+
+    if (missing.length){
+      showError("Заполни обязательные поля по выбранному варианту:\n• " + missing.join("\n• "));
+      return false;
+    }
+    return true;
   }
 
+  function validateBeforeSubmit() {
+    if (!validateVisibleRequired([])) return false;
+    if (!validateSaleScenario()) return false;
+    return true;
+  }
+
+  // ---------- remember field ----------
+  function rememberField(id, lsKey, fallback = "") {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+      const saved = localStorage.getItem(lsKey);
+      if (!el.value && saved) el.value = saved;
+      if (!el.value && fallback) el.value = fallback;
+    } catch (e) {}
+    el.addEventListener("input", () => {
+      try { localStorage.setItem(lsKey, el.value || ""); } catch (e) {}
+    });
+    el.addEventListener("change", () => {
+      try { localStorage.setItem(lsKey, el.value || ""); } catch (e) {}
+    });
+  }
+
+  // ---------- render forms ----------
   function renderForm() {
     formCard.innerHTML = "";
+    submitBtn.disabled = true;
+    submitBtn.style.display = "block";
+    submitBtn.textContent = "Отправить";
     showError("");
 
-    const badge = el("div", {class: "pill"});
-    badge.textContent = TITLES[formType] || formType;
-    formCard.appendChild(badge);
-
     if (formType === "mgr_stock") {
-      addSelectKV("deal_type", "Тип сделки", [
+      formCard.appendChild(createSelectKV("dealTypeInput", "Тип сделки", [
         {value:"Склад", label:"Склад"},
-        {value:"Поставка", label:"Поставка"}
-      ], true);
+        {value:"Поставка", label:"Поставка"},
+      ], "Выберите тип сделки", true));
 
-      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
-      addSelect("owner", "Собственник", owners, true, "Выбери собственника");
-      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
-      addInput("vin", "VIN", "text", "", true);
-      addInput("complectation", "Комплектация", "text", "", true);
-      addInput("body_color", "Цвет кузова", "text", "", true);
-      addInput("salon_color", "Цвет салона", "text", "", true);
-      addInput("price", "Цена", "text", "", true);
-      addInput("stock_date", "Дата", "date", todayISO(), true);
-      addSelectKV("payment_type", "Тип оплаты", [
+      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
+      formCard.appendChild(createAutocompleteInput("ownerInput", "Собственник", "Начни вводить", owners, true));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+      formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
+      formCard.appendChild(createInput("configInput", "Комплектация", "", "", "text", false, true));
+      formCard.appendChild(createInput("bodyColorInput", "Цвет кузова", "", "", "text", false, true));
+      formCard.appendChild(createInput("salonColorInput", "Цвет салона", "", "", "text", false, true));
+      formCard.appendChild(createInput("priceInput", "Цена, ₽", "", "", "text", false, true));
+      formCard.appendChild(createInput("stockDateInput", "Дата", "", todayISO(), "date", false, true));
+      formCard.appendChild(createSelectKV("payTypeInput", "Тип оплаты", [
         {value:"Нал", label:"Нал"},
         {value:"Безнал", label:"Безнал"},
-        {value:"НДС", label:"НДС"}
-      ], true);
-      addInput("client", "Клиент", "text", "", true);
+        {value:"НДС", label:"НДС"},
+      ], "Выберите тип оплаты", true));
+      formCard.appendChild(createInput("clientInput", "Клиент", "", "", "text", false, true));
+
+      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupMoneyInput("priceInput");
+      rememberField("managerInput", LS_KEYS.MANAGER, "");
+      rememberField("ownerInput", LS_KEYS.OWNER, "");
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "sale_main") {
-      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
-      addSelect("owner", "Собственник", owners, true, "Выбери собственника");
-      addInput("sale_date", "Дата продажи", "date", todayISO(), true);
-      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
-      addInput("vin", "VIN", "text", "", true);
-      addSelect("source", "Источник", sources, true, "Выбери источник");
-
-      addSelectKV("payment_mode", "Оплата", [
-        {value:"cash", label:"Нал"},
-        {value:"cashless", label:"Безнал"}
-      ], true);
-
-      addSelectKV("vat_mode", "НДС", [
-        {value:"yes", label:"С НДС"},
-        {value:"no", label:"Без НДС"}
-      ], true);
-
-      addSelectKV("broker_mode", "Брокер", [
-        {value:"yes", label:"Есть"},
-        {value:"no", label:"Нет"}
-      ], true);
-
-      addInput("buyer", "Покупатель", "text");
-      addInput("receiver", "Получатель", "text");
-      addInput("price", "Цена", "text", "", true);
-      addInput("price_no_commission", "Цена без комиссии", "text");
-      addInput("contract_price", "Сумма договора", "text");
-      addInput("broker_price", "Цена без комиссии брокера", "text");
-      addInput("broker_expense", "Комиссия брокера", "text");
-      addInput("markup_nds", "Наценка НДС", "text");
-      addInput("price_no_vat_cash", "Цена без НДС за наличные", "text");
+      renderSaleMain();
       return;
     }
 
     if (formType === "sale_deposit") {
-      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
-      addInput("sale_date", "Дата", "date", todayISO(), true);
-      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
-      addInput("vin", "VIN", "text", "", true);
-      addSelect("source", "Источник", sources, true, "Выбери источник");
-      addInput("deposit_sum", "Сумма задатка", "text", "", true);
-      addInput("receiver", "Кому передана сумма", "text", "", true);
-      addInput("price", "Цена продажи", "text", "", true);
-      addInput("buyer", "Покупатель", "text");
+      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
+      formCard.appendChild(createInput("saleDateInput", "Дата", "", todayISO(), "date", false, true));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+      formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
+      formCard.appendChild(createAutocompleteInput("leadSourceInput", "Источник", "Начни вводить", sources, true));
+      formCard.appendChild(createInput("depositSumInput", "Сумма задатка", "", "", "text", false, true));
+      formCard.appendChild(createInput("receiverInput", "Кому передана сумма", "", "", "text", false, true));
+      formCard.appendChild(createInput("priceInput", "Цена продажи", "", "", "text", false, true));
+      formCard.appendChild(createInput("buyerInput", "Покупатель (необязательно)", "", "", "text", false, false));
+
+      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupMoneyInput("depositSumInput");
+      setupMoneyInput("priceInput");
+      rememberField("managerInput", LS_KEYS.MANAGER, "");
+      rememberField("leadSourceInput", LS_KEYS.SOURCE, "");
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "deposit_status") {
-      addInput("record_id", "ID записи задатка", "text", "", true, "Например: sale_deposit_ab12cd34");
-      addSelectKV("status", "Новый статус", [
+      formCard.appendChild(createInput("recordIdInput", "ID записи задатка", "Например: sale_deposit_ab12cd34", "", "text", false, true));
+      formCard.appendChild(createSelectKV("statusInput", "Новый статус", [
         {value:"Зачтён", label:"✅ Зачтён"},
         {value:"Возврат", label:"↩️ Возврат"},
-        {value:"Сгорел", label:"🔥 Сгорел"}
-      ], true);
+        {value:"Сгорел", label:"🔥 Сгорел"},
+      ], "Выберите статус", true));
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "sale_extra") {
-      addSelect("manager", "Менеджер", managers, true, "Выбери менеджера");
-      addInput("sale_date", "Дата", "date", todayISO(), true);
-      addSelect("brand_model", "Марка / Модель", brands, true, "Выбери модель");
-      addInput("vin", "VIN", "text", "", true);
-      addTextarea("extra_desc", "Описание доп. услуг");
-      addInput("price", "Цена продажи", "text", "", true);
-      addInput("receiver", "Кому передали средства", "text", "", true);
-      addInput("purchaser", "Кто выдал средства на закупку", "text", "", true);
-      addInput("buy_price", "Цена покупки", "text", "", true);
-      addInput("profit", "Доход", "text", "", true);
+      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
+      formCard.appendChild(createInput("saleDateInput", "Дата", "", todayISO(), "date", false, true));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+      formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
+      formCard.appendChild(createTextarea("extraDescInput", "Доп. услуги (описание) (необязательно)", "", false, false));
+      formCard.appendChild(createInput("priceInput", "Цена продажи", "", "", "text", false, true));
+      formCard.appendChild(createInput("receiverInput", "Кому передали средства", "", "", "text", false, true));
+      formCard.appendChild(createInput("purchaserInput", "Кто выдал средства на закупку", "", "", "text", false, true));
+      formCard.appendChild(createInput("buyPriceInput", "Цена покупки", "", "", "text", false, true));
+      formCard.appendChild(createInput("profitInput", "Доход", "Авторасчёт (можно изменить)", "", "text", false, true));
+
+      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupMoneyInput("priceInput");
+      setupMoneyInput("buyPriceInput");
+      setupMoneyInput("profitInput");
+      setupAutoProfit();
+      rememberField("managerInput", LS_KEYS.MANAGER, "");
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "fin_auto_template") {
-      addInput("vin", "VIN", "text");
-      addSelect("brand_model", "Марка / Модель", brands, false, "Выбери модель");
-      addInput("op_date", "Дата", "date", todayISO(), true);
-      addInput("evacuator", "Эвакуатор", "text");
-      addInput("lab", "Лаборатория", "text");
-      addInput("util_writeoff", "Списания утильсбора", "text");
-      addInput("util", "Утильсбор", "text");
-      addInput("pre_sale", "Предпродажная подготовка", "text");
-      addInput("marketing", "Маркетинг", "text");
-      addInput("other", "Прочие расходы", "text");
-      addTextarea("extra_expenses", "Доп. расходы");
-      addTextarea("comment", "Комментарий");
+      formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, false));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, false));
+      formCard.appendChild(createInput("faDateInput", "Дата", "", todayISO(), "date", false, true));
+      formCard.appendChild(createInput("evacuatorInput", "Эвакуатор", "", "", "text", false, false));
+      formCard.appendChild(createInput("labInput", "Лаборатория", "", "", "text", false, false));
+      formCard.appendChild(createInput("utilWriteoffInput", "Списания утильсбора", "", "", "text", false, false));
+      formCard.appendChild(createInput("utilInput", "Утильсбор", "", "", "text", false, false));
+      formCard.appendChild(createInput("preSaleInput", "Предпродажная подготовка", "", "", "text", false, false));
+      formCard.appendChild(createInput("marketingInput", "Маркетинг", "", "", "text", false, false));
+      formCard.appendChild(createInput("otherInput", "Прочие расходы", "", "", "text", false, false));
+      formCard.appendChild(createTextarea("extraExpensesInput", "Доп. расходы", "Если есть — строками", false, false));
+      formCard.appendChild(createTextarea("commentInput", "Комментарий", "", false, false));
+
+      setupVinAutocompleteSmart("vinInput", getAllVins);
+      ["evacuatorInput","labInput","utilWriteoffInput","utilInput","preSaleInput","marketingInput","otherInput"].forEach(setupMoneyInput);
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "fin_company") {
-      addInput("op_date", "Дата", "date", todayISO(), true);
-      addSelect("expense_article", "Статья расхода", expenseArticles, true, "Выбери статью");
-      addInput("amount", "Сумма", "text", "", true);
-      addTextarea("comment", "Комментарий");
+      formCard.appendChild(createInput("opDateInput", "Дата", "", todayISO(), "date", false, true));
+      formCard.appendChild(createAutocompleteInput("expenseArticleInput", "Статья расхода", "Начни вводить", expenseArticles, true));
+      formCard.appendChild(createInput("amountInput", "Сумма, ₽", "", "", "text", false, true));
+      formCard.appendChild(createTextarea("commentInput", "Комментарий", "", false, false));
+
+      setupMoneyInput("amountInput");
+      rememberField("expenseArticleInput", LS_KEYS.EXP_ARTICLE, "");
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "fin_other_income") {
-      addInput("op_date", "Дата", "date", todayISO(), true);
-      addSelect("income_article", "Статья дохода", incomeArticles, true, "Выбери статью");
-      addInput("amount", "Сумма", "text", "", true);
-      addTextarea("comment", "Комментарий");
+      formCard.appendChild(createInput("incomeDateInput", "Дата", "", todayISO(), "date", false, true));
+      formCard.appendChild(createAutocompleteInput("incomeArticleInput", "Статья дохода", "Начни вводить", incomeArticles, true));
+      formCard.appendChild(createInput("incomeAmountInput", "Сумма, ₽", "", "", "text", false, true));
+      formCard.appendChild(createTextarea("incomeCommentInput", "Комментарий", "", false, false));
+
+      setupMoneyInput("incomeAmountInput");
+      rememberField("incomeArticleInput", LS_KEYS.INCOME_ARTICLE, "");
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "refs_manage") {
-      addSelectKV("mode", "Режим", [
+      formCard.appendChild(createSelectKV("refsModeInput", "Режим", [
         {value:"single", label:"Добавить одно значение"},
         {value:"bulk", label:"Добавить списком"},
-        {value:"deactivate", label:"Отключить значение"}
-      ], true);
+        {value:"deactivate", label:"Отключить значение"},
+      ], "Выберите режим", true));
 
-      addSelectKV("ref_type", "Тип справочника", [
+      formCard.appendChild(createSelectKV("refTypeInput", "Тип справочника", [
         {value:"manager", label:"Менеджер"},
         {value:"source", label:"Источник"},
         {value:"owner", label:"Собственник"},
         {value:"brand_model", label:"Марка / Модель"},
         {value:"expense_article", label:"Статья расхода"},
-        {value:"income_article", label:"Статья дохода"}
-      ], true);
+        {value:"income_article", label:"Статья дохода"},
+        {value:"vin", label:"VIN"},
+      ], "Выберите тип", true));
 
-      addInput("value", "Одно значение", "text");
-      addTextarea("bulk_text", "Список значений", false, "Каждое значение с новой строки или через запятую");
-      addHint("Для массового добавления вставь список строками или через запятую. Для отключения укажи одно точное значение.");
+      formCard.appendChild(createInput("refValueInput", "Одно значение", "", "", "text", false, false));
+      formCard.appendChild(createTextarea("refBulkInput", "Список значений", "Каждое значение с новой строки или через запятую", false, false));
+
+      const hint = document.createElement("div");
+      hint.className = "hint";
+      hint.textContent = "VIN лучше тоже можно добавлять сюда списком, а потом мы подтянем VIN ещё и из рабочих листов.";
+      formCard.appendChild(hint);
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "record_find") {
-      addSelectKV("sheet_name", "Лист", [
+      formCard.appendChild(createSelectKV("sheetNameInput", "Лист", [
         {value:"Сток", label:"Сток"},
         {value:"Продажи", label:"Продажи"},
         {value:"Задаток", label:"Задаток"},
         {value:"Доп услуги", label:"Доп услуги"},
         {value:"Расходы авто РФ", label:"Расходы авто РФ"},
         {value:"Расходы компании", label:"Расходы компании"},
-        {value:"Прочие доходы", label:"Прочие доходы"}
-      ], true);
+        {value:"Прочие доходы", label:"Прочие доходы"},
+      ], "Выберите лист", true));
 
-      addInput("record_id", "ID записи", "text");
-      addInput("vin", "VIN", "text");
-      addInput("buyer", "Покупатель / Клиент / Получатель", "text");
-      addInput("date", "Дата (часть даты тоже можно)", "text", "", false, "Например: 29.03.2026");
-      addHint("Можно заполнить одно или несколько полей. Результат бот пришлёт сообщением в Telegram.");
+      formCard.appendChild(createInput("findRecordIdInput", "ID записи (необязательно)", "", "", "text", false, false));
+      formCard.appendChild(createInput("findVinInput", "VIN (необязательно)", "", "", "text", false, false));
+      formCard.appendChild(createInput("findBuyerInput", "Покупатель / Клиент / Получатель (необязательно)", "", "", "text", false, false));
+      formCard.appendChild(createInput("findDateInput", "Дата (необязательно)", "Например: 29.03.2026", "", "text", false, false));
+
+      submitBtn.disabled = false;
       return;
     }
 
     if (formType === "record_edit") {
-      addSelectKV("sheet_name", "Лист", [
+      formCard.appendChild(createSelectKV("sheetNameInput", "Лист", [
         {value:"Сток", label:"Сток"},
         {value:"Продажи", label:"Продажи"},
         {value:"Задаток", label:"Задаток"},
         {value:"Доп услуги", label:"Доп услуги"},
         {value:"Расходы авто РФ", label:"Расходы авто РФ"},
         {value:"Расходы компании", label:"Расходы компании"},
-        {value:"Прочие доходы", label:"Прочие доходы"}
-      ], true);
+        {value:"Прочие доходы", label:"Прочие доходы"},
+      ], "Выберите лист", true));
 
-      addInput("record_id", "ID записи", "text", "", true);
+      formCard.appendChild(createInput("recordIdInput", "ID записи", "", "", "text", false, true));
+      formCard.appendChild(createInput("editManagerInput", "Менеджер", "", "", "text", false, false));
+      formCard.appendChild(createInput("editOwnerInput", "Собственник", "", "", "text", false, false));
+      formCard.appendChild(createInput("editSaleDateInput", "Дата продажи", "", "", "date", false, false));
+      formCard.appendChild(createInput("editStockDateInput", "Дата стока", "", "", "date", false, false));
+      formCard.appendChild(createInput("editOpDateInput", "Дата операции", "", "", "date", false, false));
+      formCard.appendChild(createInput("editBrandInput", "Марка / Модель", "", "", "text", false, false));
+      formCard.appendChild(createInput("editVinInput", "VIN", "", "", "text", false, false));
+      formCard.appendChild(createInput("editSourceInput", "Источник", "", "", "text", false, false));
+      formCard.appendChild(createInput("editBuyerInput", "Покупатель", "", "", "text", false, false));
+      formCard.appendChild(createInput("editReceiverInput", "Получатель", "", "", "text", false, false));
+      formCard.appendChild(createInput("editPriceInput", "Цена", "", "", "text", false, false));
+      formCard.appendChild(createInput("editDepositInput", "Сумма задатка", "", "", "text", false, false));
+      formCard.appendChild(createInput("editStatusInput", "Статус", "", "", "text", false, false));
+      formCard.appendChild(createInput("editAmountInput", "Сумма", "", "", "text", false, false));
+      formCard.appendChild(createInput("editExpenseArticleInput", "Статья расхода", "", "", "text", false, false));
+      formCard.appendChild(createInput("editIncomeArticleInput", "Статья дохода", "", "", "text", false, false));
+      formCard.appendChild(createTextarea("editCommentInput", "Комментарий", "", false, false));
 
-      addInput("manager", "Менеджер", "text");
-      addInput("owner", "Собственник", "text");
-      addInput("sale_date", "Дата продажи", "date");
-      addInput("stock_date", "Дата стока", "date");
-      addInput("op_date", "Дата операции", "date");
-      addInput("brand_model", "Марка / Модель", "text");
-      addInput("vin", "VIN", "text");
-      addInput("source", "Источник", "text");
-      addInput("buyer", "Покупатель", "text");
-      addInput("receiver", "Получатель", "text");
-      addInput("price", "Цена", "text");
-      addInput("deposit_sum", "Сумма задатка", "text");
-      addInput("status", "Статус", "text");
-      addInput("amount", "Сумма", "text");
-      addInput("expense_article", "Статья расхода", "text");
-      addInput("income_article", "Статья дохода", "text");
-      addTextarea("comment", "Комментарий");
-      addHint("Заполняй только те поля, которые нужно поменять.");
+      setupMoneyInput("editPriceInput");
+      setupMoneyInput("editDepositInput");
+      setupMoneyInput("editAmountInput");
+
+      submitBtn.disabled = false;
       return;
     }
 
-    formCard.innerHTML = "<div class='hint'>Форма не найдена.</div>";
+    formCard.appendChild(createTextarea("rawInput", "Данные", "Форма не настроена.", false, true));
+    submitBtn.disabled = false;
   }
 
-  function collectPayload() {
+  // ---------- dynamic sale form ----------
+  function renderSaleMain() {
+    formCard.innerHTML = "";
+
+    formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
+    formCard.appendChild(createAutocompleteInput("ownerInput", "Собственник", "Начни вводить", owners, true));
+
+    const payWrap = createSelectKV("salePaymentTypeInput", "Оплата", [
+      {value:"cash", label:"Нал"},
+      {value:"cashless", label:"Безнал"},
+    ], "Выберите оплату", true);
+
+    const vatWrap = createSelectKV("saleVatInput", "НДС", [
+      {value:"yes", label:"С НДС"},
+      {value:"no", label:"Без НДС"},
+    ], "Выберите НДС", true);
+
+    const commWrap = createSelectKV("saleCommissionInput", "Комиссия брокера", [
+      {value:"yes", label:"Есть"},
+      {value:"no", label:"Нет"},
+    ], "Выберите", true);
+
+    formCard.appendChild(payWrap);
+    formCard.appendChild(vatWrap);
+    formCard.appendChild(commWrap);
+
+    const badge = document.createElement("div");
+    badge.style.marginTop = "6px";
+    badge.innerHTML = `<span class="pill" id="saleVariantBadge">Вариант: —</span>`;
+    formCard.appendChild(badge);
+
+    formCard.appendChild(createInput("saleDateInput", "Дата продажи", "", todayISO(), "date", false, true));
+    formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+    formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
+    formCard.appendChild(createAutocompleteInput("leadSourceInput", "Источник", "Начни вводить", sources, true));
+
+    const buyerWrap = createInput("buyerInput", "Покупатель (необязательно)", "", "", "text", false, false);
+    const receiverWrap = createInput("receiverInput", "Получатель (необязательно)", "", "", "text", false, false);
+    formCard.appendChild(buyerWrap);
+    formCard.appendChild(receiverWrap);
+
+    const priceCashWrap = createInput("priceCashInput", "Цена (нал)", "", "", "text", false, true);
+    const priceCashNoCommWrap = createInput("priceCashNoCommInput", "Цена без комиссии (нал)", "", "", "text", false, true);
+
+    const priceCashlessWrap = createInput("priceCashlessInput", "Сумма (безнал, без НДС)", "", "", "text", false, true);
+    const priceNdsWrap = createInput("priceNdsInput", "Цена с НДС", "", "", "text", false, true);
+    const markupNdsWrap = createInput("markupNdsInput", "Наценка НДС (% / руб)", "", "", "text", false, true);
+
+    const priceNoVatCashWrap = createInput("priceNoVatCashInput", "Цена без НДС за наличные", "", "", "text", false, true);
+
+    const contractPriceWrap = createInput("contractPriceInput", "Сумма договора", "", "", "text", false, true);
+    const brokerPriceWrap = createInput("brokerPriceInput", "Цена без комиссии брокера", "", "", "text", false, true);
+    const brokerExpenseWrap = createInput("brokerExpenseInput", "Комиссия брокера", "", "", "text", false, true);
+
+    formCard.appendChild(priceCashWrap);
+    formCard.appendChild(priceCashNoCommWrap);
+    formCard.appendChild(priceCashlessWrap);
+    formCard.appendChild(priceNdsWrap);
+    formCard.appendChild(markupNdsWrap);
+    formCard.appendChild(priceNoVatCashWrap);
+    formCard.appendChild(contractPriceWrap);
+    formCard.appendChild(brokerPriceWrap);
+    formCard.appendChild(brokerExpenseWrap);
+
+    [
+      "priceCashInput","priceCashNoCommInput","priceCashlessInput",
+      "priceNdsInput","markupNdsInput","priceNoVatCashInput",
+      "contractPriceInput","brokerPriceInput","brokerExpenseInput"
+    ].forEach(setupMoneyInput);
+
+    function updateSaleMainVisibility() {
+      const payment = document.getElementById("salePaymentTypeInput").value || "cash";
+      const commission = (document.getElementById("saleCommissionInput").value || "no") === "yes";
+      const vatYes = (document.getElementById("saleVatInput").value || "no") === "yes";
+      const vat = (payment === "cashless") && vatYes;
+
+      const vatSelect = document.getElementById("saleVatInput");
+      if (payment !== "cashless") {
+        vatSelect.disabled = true;
+        vatSelect.value = "no";
+      } else {
+        vatSelect.disabled = false;
+      }
+
+      showEl(receiverWrap, payment === "cash");
+
+      showEl(priceCashWrap, payment === "cash");
+      showEl(priceCashNoCommWrap, payment === "cash" && commission);
+
+      showEl(priceCashlessWrap, payment === "cashless" && !vat);
+      showEl(priceNdsWrap, payment === "cashless" && vat);
+      showEl(markupNdsWrap, payment === "cashless" && vat);
+      showEl(priceNoVatCashWrap, payment === "cashless" && vat);
+
+      showEl(contractPriceWrap, payment === "cashless" && commission);
+      showEl(brokerPriceWrap, payment === "cashless" && commission);
+      showEl(brokerExpenseWrap, payment === "cashless" && commission);
+
+      if (payment === "cash") {
+        showEl(priceCashlessWrap, false);
+        showEl(priceNdsWrap, false);
+        showEl(markupNdsWrap, false);
+        showEl(priceNoVatCashWrap, false);
+        showEl(contractPriceWrap, false);
+        showEl(brokerPriceWrap, false);
+        showEl(brokerExpenseWrap, false);
+      }
+
+      let variant = "";
+      if (payment === "cash" && !commission) variant = "Нал / без брокера";
+      if (payment === "cash" && commission) variant = "Нал / с брокером";
+      if (payment === "cashless" && vat && !commission) variant = "Безнал / с НДС / без брокера";
+      if (payment === "cashless" && vat && commission) variant = "Безнал / с НДС / с брокером";
+      if (payment === "cashless" && !vat && !commission) variant = "Безнал / без НДС / без брокера";
+      if (payment === "cashless" && !vat && commission) variant = "Безнал / без НДС / с брокером";
+
+      const badgeEl = document.getElementById("saleVariantBadge");
+      if (badgeEl) badgeEl.textContent = "Вариант: " + variant;
+    }
+
+    document.getElementById("salePaymentTypeInput").addEventListener("change", updateSaleMainVisibility);
+    document.getElementById("saleVatInput").addEventListener("change", updateSaleMainVisibility);
+    document.getElementById("saleCommissionInput").addEventListener("change", updateSaleMainVisibility);
+    updateSaleMainVisibility();
+
+    setupVinAutocompleteSmart("vinInput", getAllVins);
+    rememberField("managerInput", LS_KEYS.MANAGER, "");
+    rememberField("ownerInput", LS_KEYS.OWNER, "");
+    rememberField("leadSourceInput", LS_KEYS.SOURCE, "");
+
+    submitBtn.disabled = false;
+  }
+
+  // ---------- auto profit ----------
+  function toNum(v){
+    const s = String(v || "")
+      .replace(/\s/g, "")
+      .replace(",", ".")
+      .replace(/[^\d.\-]/g, "");
+    const n = parseFloat(s);
+    return Number.isFinite(n) ? n : 0;
+  }
+
+  function setupAutoProfit(){
+    const priceEl = document.getElementById("priceInput");
+    const buyEl = document.getElementById("buyPriceInput");
+    const profitEl = document.getElementById("profitInput");
+    if (!priceEl || !buyEl || !profitEl) return;
+
+    let manual = false;
+    profitEl.addEventListener("input", ()=>{ manual=true; });
+
+    const recalc = () => {
+      if (manual) return;
+      const p = toNum(priceEl.value);
+      const b = toNum(buyEl.value);
+      if (!p && !b) return;
+      const diff = p - b;
+      profitEl.value = formatWithSpaces(String(Math.round(diff)));
+    };
+
+    priceEl.addEventListener("input", recalc);
+    buyEl.addEventListener("input", recalc);
+  }
+
+  // ---------- collect ----------
+  function collectSaleMain() {
+    const payment = document.getElementById("salePaymentTypeInput")?.value || "cash";
+    const vatYes = (document.getElementById("saleVatInput")?.value || "no") === "yes";
+    const commission = (document.getElementById("saleCommissionInput")?.value || "no") === "yes";
+    const vat = (payment === "cashless") && vatYes;
+
+    let price = "";
+    if (payment === "cash") {
+      price = document.getElementById("priceCashInput")?.value || "";
+    } else {
+      price = vat ? (document.getElementById("priceNdsInput")?.value || "") : (document.getElementById("priceCashlessInput")?.value || "");
+    }
+
+    return {
+      action: "create",
+      formType,
+      manager: document.getElementById("managerInput")?.value || "",
+      owner: document.getElementById("ownerInput")?.value || "",
+      sale_date: getRuDate("saleDateInput"),
+      brand_model: document.getElementById("brandModelInput")?.value || "",
+      vin: document.getElementById("vinInput")?.value || "",
+      source: document.getElementById("leadSourceInput")?.value || "",
+      payment_mode: payment,
+      vat_mode: vatYes ? "yes" : "no",
+      broker_mode: commission ? "yes" : "no",
+      buyer: document.getElementById("buyerInput")?.value || "",
+      receiver: document.getElementById("receiverInput")?.value || "",
+      price: price,
+      price_no_commission: (payment === "cash" && commission) ? (document.getElementById("priceCashNoCommInput")?.value || "") : "",
+      contract_price: (payment === "cashless" && commission) ? (document.getElementById("contractPriceInput")?.value || "") : "",
+      broker_price: (payment === "cashless" && commission) ? (document.getElementById("brokerPriceInput")?.value || "") : "",
+      broker_expense: (payment === "cashless" && commission) ? (document.getElementById("brokerExpenseInput")?.value || "") : "",
+      markup_nds: (payment === "cashless" && vat) ? (document.getElementById("markupNdsInput")?.value || "") : "",
+      price_no_vat_cash: (payment === "cashless" && vat) ? (document.getElementById("priceNoVatCashInput")?.value || "") : ""
+    };
+  }
+
+  function collectFormData() {
+    if (formType === "mgr_stock") {
+      return {
+        action: "create",
+        formType,
+        deal_type: document.getElementById("dealTypeInput")?.value || "",
+        manager: document.getElementById("managerInput")?.value || "",
+        owner: document.getElementById("ownerInput")?.value || "",
+        brand_model: document.getElementById("brandModelInput")?.value || "",
+        vin: document.getElementById("vinInput")?.value || "",
+        complectation: document.getElementById("configInput")?.value || "",
+        body_color: document.getElementById("bodyColorInput")?.value || "",
+        salon_color: document.getElementById("salonColorInput")?.value || "",
+        price: document.getElementById("priceInput")?.value || "",
+        stock_date: getRuDate("stockDateInput"),
+        payment_type: document.getElementById("payTypeInput")?.value || "",
+        client: document.getElementById("clientInput")?.value || ""
+      };
+    }
+
+    if (formType === "sale_main") return collectSaleMain();
+
+    if (formType === "sale_deposit") {
+      return {
+        action: "create",
+        formType,
+        manager: document.getElementById("managerInput")?.value || "",
+        sale_date: getRuDate("saleDateInput"),
+        brand_model: document.getElementById("brandModelInput")?.value || "",
+        vin: document.getElementById("vinInput")?.value || "",
+        source: document.getElementById("leadSourceInput")?.value || "",
+        deposit_sum: document.getElementById("depositSumInput")?.value || "",
+        receiver: document.getElementById("receiverInput")?.value || "",
+        price: document.getElementById("priceInput")?.value || "",
+        buyer: document.getElementById("buyerInput")?.value || ""
+      };
+    }
+
+    if (formType === "deposit_status") {
+      return {
+        action: "create",
+        formType,
+        record_id: document.getElementById("recordIdInput")?.value || "",
+        status: document.getElementById("statusInput")?.value || ""
+      };
+    }
+
+    if (formType === "sale_extra") {
+      return {
+        action: "create",
+        formType,
+        manager: document.getElementById("managerInput")?.value || "",
+        sale_date: getRuDate("saleDateInput"),
+        brand_model: document.getElementById("brandModelInput")?.value || "",
+        vin: document.getElementById("vinInput")?.value || "",
+        extra_desc: document.getElementById("extraDescInput")?.value || "",
+        price: document.getElementById("priceInput")?.value || "",
+        receiver: document.getElementById("receiverInput")?.value || "",
+        purchaser: document.getElementById("purchaserInput")?.value || "",
+        buy_price: document.getElementById("buyPriceInput")?.value || "",
+        profit: document.getElementById("profitInput")?.value || ""
+      };
+    }
+
+    if (formType === "fin_auto_template") {
+      return {
+        action: "create",
+        formType,
+        vin: document.getElementById("vinInput")?.value || "",
+        brand_model: document.getElementById("brandModelInput")?.value || "",
+        op_date: getRuDate("faDateInput"),
+        evacuator: document.getElementById("evacuatorInput")?.value || "",
+        lab: document.getElementById("labInput")?.value || "",
+        util_writeoff: document.getElementById("utilWriteoffInput")?.value || "",
+        util: document.getElementById("utilInput")?.value || "",
+        pre_sale: document.getElementById("preSaleInput")?.value || "",
+        marketing: document.getElementById("marketingInput")?.value || "",
+        other: document.getElementById("otherInput")?.value || "",
+        extra_expenses: document.getElementById("extraExpensesInput")?.value || "",
+        comment: document.getElementById("commentInput")?.value || ""
+      };
+    }
+
+    if (formType === "fin_company") {
+      return {
+        action: "create",
+        formType,
+        op_date: getRuDate("opDateInput"),
+        expense_article: document.getElementById("expenseArticleInput")?.value || "",
+        amount: document.getElementById("amountInput")?.value || "",
+        comment: document.getElementById("commentInput")?.value || ""
+      };
+    }
+
+    if (formType === "fin_other_income") {
+      return {
+        action: "create",
+        formType,
+        op_date: getRuDate("incomeDateInput"),
+        income_article: document.getElementById("incomeArticleInput")?.value || "",
+        amount: document.getElementById("incomeAmountInput")?.value || "",
+        comment: document.getElementById("incomeCommentInput")?.value || ""
+      };
+    }
+
     if (formType === "refs_manage") {
       return {
         action: "add_reference",
         formType,
-        mode: getVal("mode"),
-        ref_type: getVal("ref_type"),
-        value: getVal("value"),
-        bulk_text: getVal("bulk_text")
+        mode: document.getElementById("refsModeInput")?.value || "",
+        ref_type: document.getElementById("refTypeInput")?.value || "",
+        value: document.getElementById("refValueInput")?.value || "",
+        bulk_text: document.getElementById("refBulkInput")?.value || ""
       };
     }
 
@@ -481,11 +1178,11 @@
       return {
         action: "find_record",
         formType,
-        sheet_name: getVal("sheet_name"),
-        record_id: getVal("record_id"),
-        vin: getVal("vin"),
-        buyer: getVal("buyer"),
-        date: getVal("date")
+        sheet_name: document.getElementById("sheetNameInput")?.value || "",
+        record_id: document.getElementById("findRecordIdInput")?.value || "",
+        vin: document.getElementById("findVinInput")?.value || "",
+        buyer: document.getElementById("findBuyerInput")?.value || "",
+        date: document.getElementById("findDateInput")?.value || ""
       };
     }
 
@@ -493,172 +1190,65 @@
       return {
         action: "update_record",
         formType,
-        sheet_name: getVal("sheet_name"),
-        record_id: getVal("record_id"),
-        manager: getVal("manager"),
-        owner: getVal("owner"),
-        sale_date: getVal("sale_date") ? toRuDate(getVal("sale_date")) : "",
-        stock_date: getVal("stock_date") ? toRuDate(getVal("stock_date")) : "",
-        op_date: getVal("op_date") ? toRuDate(getVal("op_date")) : "",
-        brand_model: getVal("brand_model"),
-        vin: getVal("vin"),
-        source: getVal("source"),
-        buyer: getVal("buyer"),
-        receiver: getVal("receiver"),
-        price: getVal("price"),
-        deposit_sum: getVal("deposit_sum"),
-        status: getVal("status"),
-        amount: getVal("amount"),
-        expense_article: getVal("expense_article"),
-        income_article: getVal("income_article"),
-        comment: getVal("comment")
+        sheet_name: document.getElementById("sheetNameInput")?.value || "",
+        record_id: document.getElementById("recordIdInput")?.value || "",
+        manager: document.getElementById("editManagerInput")?.value || "",
+        owner: document.getElementById("editOwnerInput")?.value || "",
+        sale_date: document.getElementById("editSaleDateInput")?.value ? getRuDate("editSaleDateInput") : "",
+        stock_date: document.getElementById("editStockDateInput")?.value ? getRuDate("editStockDateInput") : "",
+        op_date: document.getElementById("editOpDateInput")?.value ? getRuDate("editOpDateInput") : "",
+        brand_model: document.getElementById("editBrandInput")?.value || "",
+        vin: document.getElementById("editVinInput")?.value || "",
+        source: document.getElementById("editSourceInput")?.value || "",
+        buyer: document.getElementById("editBuyerInput")?.value || "",
+        receiver: document.getElementById("editReceiverInput")?.value || "",
+        price: document.getElementById("editPriceInput")?.value || "",
+        deposit_sum: document.getElementById("editDepositInput")?.value || "",
+        status: document.getElementById("editStatusInput")?.value || "",
+        amount: document.getElementById("editAmountInput")?.value || "",
+        expense_article: document.getElementById("editExpenseArticleInput")?.value || "",
+        income_article: document.getElementById("editIncomeArticleInput")?.value || "",
+        comment: document.getElementById("editCommentInput")?.value || ""
       };
     }
 
-    if (formType === "deposit_status") {
-      return {
-        action: "create",
-        formType,
-        record_id: getVal("record_id"),
-        status: getVal("status")
-      };
-    }
-
-    if (formType === "mgr_stock") {
-      return {
-        action: "create",
-        formType,
-        deal_type: getVal("deal_type"),
-        manager: getVal("manager"),
-        owner: getVal("owner"),
-        brand_model: getVal("brand_model"),
-        vin: getVal("vin"),
-        complectation: getVal("complectation"),
-        body_color: getVal("body_color"),
-        salon_color: getVal("salon_color"),
-        price: getVal("price"),
-        stock_date: toRuDate(getVal("stock_date")),
-        payment_type: getVal("payment_type"),
-        client: getVal("client")
-      };
-    }
-
-    if (formType === "sale_main") {
-      return {
-        action: "create",
-        formType,
-        manager: getVal("manager"),
-        owner: getVal("owner"),
-        sale_date: toRuDate(getVal("sale_date")),
-        brand_model: getVal("brand_model"),
-        vin: getVal("vin"),
-        source: getVal("source"),
-        payment_mode: getVal("payment_mode"),
-        vat_mode: getVal("vat_mode"),
-        broker_mode: getVal("broker_mode"),
-        buyer: getVal("buyer"),
-        receiver: getVal("receiver"),
-        price: getVal("price"),
-        price_no_commission: getVal("price_no_commission"),
-        contract_price: getVal("contract_price"),
-        broker_price: getVal("broker_price"),
-        broker_expense: getVal("broker_expense"),
-        markup_nds: getVal("markup_nds"),
-        price_no_vat_cash: getVal("price_no_vat_cash")
-      };
-    }
-
-    if (formType === "sale_deposit") {
-      return {
-        action: "create",
-        formType,
-        manager: getVal("manager"),
-        sale_date: toRuDate(getVal("sale_date")),
-        brand_model: getVal("brand_model"),
-        vin: getVal("vin"),
-        source: getVal("source"),
-        deposit_sum: getVal("deposit_sum"),
-        receiver: getVal("receiver"),
-        buyer: getVal("buyer"),
-        price: getVal("price")
-      };
-    }
-
-    if (formType === "sale_extra") {
-      return {
-        action: "create",
-        formType,
-        manager: getVal("manager"),
-        sale_date: toRuDate(getVal("sale_date")),
-        brand_model: getVal("brand_model"),
-        vin: getVal("vin"),
-        extra_desc: getVal("extra_desc"),
-        price: getVal("price"),
-        receiver: getVal("receiver"),
-        purchaser: getVal("purchaser"),
-        buy_price: getVal("buy_price"),
-        profit: getVal("profit")
-      };
-    }
-
-    if (formType === "fin_auto_template") {
-      return {
-        action: "create",
-        formType,
-        vin: getVal("vin"),
-        brand_model: getVal("brand_model"),
-        op_date: toRuDate(getVal("op_date")),
-        evacuator: getVal("evacuator"),
-        lab: getVal("lab"),
-        util_writeoff: getVal("util_writeoff"),
-        util: getVal("util"),
-        pre_sale: getVal("pre_sale"),
-        marketing: getVal("marketing"),
-        other: getVal("other"),
-        extra_expenses: getVal("extra_expenses"),
-        comment: getVal("comment")
-      };
-    }
-
-    if (formType === "fin_company") {
-      return {
-        action: "create",
-        formType,
-        op_date: toRuDate(getVal("op_date")),
-        expense_article: getVal("expense_article"),
-        amount: getVal("amount"),
-        comment: getVal("comment")
-      };
-    }
-
-    if (formType === "fin_other_income") {
-      return {
-        action: "create",
-        formType,
-        op_date: toRuDate(getVal("op_date")),
-        income_article: getVal("income_article"),
-        amount: getVal("amount"),
-        comment: getVal("comment")
-      };
-    }
-
-    return { action: "create", formType };
+    return { action: "create", formType, raw: document.getElementById("rawInput")?.value || "" };
   }
 
-  submitBtn.addEventListener("click", () => {
-    showError("");
-    if (!validateRequired()) return;
+  // ---------- Init ----------
+  renderForm();
 
-    if (!tg) {
-      showError("Открой форму через Telegram-бота.");
+  let _touchLock = false;
+  submitBtn.addEventListener("touchend", (e) => {
+    if (_touchLock) return;
+    _touchLock = true;
+    e.preventDefault();
+    submitBtn.click();
+    setTimeout(() => { _touchLock = false; }, 400);
+  }, { passive: false });
+
+  // ---------- Submit ----------
+  submitBtn.addEventListener("click", async () => {
+    try { document.activeElement?.blur?.(); } catch(e) {}
+    showError("");
+
+    if (!validateBeforeSubmit()) return;
+
+    const tgNow = window.Telegram?.WebApp;
+    if (!tgNow) {
+      alert("Открой форму через кнопку в Telegram-боте.");
       return;
     }
 
-    const payload = collectPayload();
-    const str = JSON.stringify(payload);
+    const payload = collectFormData();
 
-    if (str.length > 3800) {
-      showError("Слишком много данных для отправки.");
+    try {
+      if (payload && payload.vin) rememberVin(payload.vin);
+    } catch(e){}
+
+    const dataStr = JSON.stringify(payload);
+    if (dataStr.length > 3800) {
+      tgAlert("Слишком много текста для Telegram. Сократи комментарии и отправь ещё раз.");
       return;
     }
 
@@ -666,18 +1256,14 @@
     submitBtn.textContent = "Отправка...";
 
     try {
-      tg.sendData(str);
-      setTimeout(() => {
-        try { tg.close(); } catch(e){}
-      }, 400);
+      tgNow.sendData(dataStr);
+      setTimeout(() => { try { tgNow.close(); } catch(e) {} }, 650);
     } catch (e) {
+      tgAlert("Не удалось отправить данные. Попробуй ещё раз.");
       submitBtn.disabled = false;
       submitBtn.textContent = "Отправить";
-      showError("Не удалось отправить данные.");
     }
   });
-
-  renderForm();
 </script>
 </body>
 </html>
