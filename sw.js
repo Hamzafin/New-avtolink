@@ -1,6 +1,6 @@
-/* sw.js — Test Avto WebApp */
+/* sw.js — Autolink WebApp */
 const VERSION = new URL(self.location.href).searchParams.get("v") || "1";
-const CACHE_NAME = `test-avto-cache-v${VERSION}`;
+const CACHE_NAME = `autolink-cache-v${VERSION}`;
 
 const CORE = [
   "./",
@@ -28,7 +28,6 @@ self.addEventListener("fetch", (event) => {
   const req = event.request;
   if (req.method !== "GET") return;
 
-  // Навигация — network first
   if (req.mode === "navigate") {
     event.respondWith((async () => {
       try {
@@ -44,7 +43,6 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
-  // Статика — cache first
   event.respondWith((async () => {
     const cached = await caches.match(req);
     if (cached) return cached;
