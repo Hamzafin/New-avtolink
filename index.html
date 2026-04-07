@@ -240,17 +240,10 @@
     lsWrite(key, (Array.isArray(arr)?arr:[]).filter(Boolean).slice(0,max));
   }
 
-  function rememberVin(vin){
-    const v = normalizeVin(vin);
-    if(!v || v.length < 4) return;
-    const cur = lsReadArr(LS_KEYS.VINS);
-    const merged = mergeUnique([v], vinsFromUrl, cur);
-    lsWriteArr(LS_KEYS.VINS, merged, 4000);
-  }
 
   function getAllVins() {
-    return mergeUnique(vinsFromUrl, lsReadArr(LS_KEYS.VINS)).map(v => normalizeVin(v));
-  }
+  return uniq((vinsFromUrl || []).map(v => normalizeVin(v)).filter(Boolean));
+}
 
   // ---------- datalist ----------
   function updateDatalist(dlId, options) {
@@ -512,8 +505,6 @@
 
     input.addEventListener("focus", () => fill(input.value));
     input.addEventListener("input", () => fill(input.value));
-    input.addEventListener("change", ()=>rememberVin(input.value));
-    input.addEventListener("blur", ()=>rememberVin(input.value));
   }
 
   // ---------- validation ----------
