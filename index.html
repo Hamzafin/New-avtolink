@@ -2,22 +2,22 @@
 <html lang="ru">
 <head>
   <meta charset="UTF-8" />
-  <title>Test Avto WebApp</title>
+  <title>Autolink WebApp</title>
   <meta name="viewport" content="width=device-width, initial-scale=1" />
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
-    *, *::before, *::after { box-sizing: border-box; }
+    *,*::before,*::after{box-sizing:border-box;}
     body {
       font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       margin: 0;
       padding: 16px;
       background: #0f172a;
       color: #e5e7eb;
-      min-height: var(--app-height, var(--tg-viewport-height, 100vh));
+      min-height: 100vh;
       padding-bottom: calc(16px + env(safe-area-inset-bottom));
       overscroll-behavior: contain;
     }
-    h1 { font-size: 20px; margin: 0 0 4px; text-align: center; }
+    h1 { font-size: 22px; margin: 0 0 4px; text-align: center; }
     .subtitle { font-size: 13px; text-align: center; color: #94a3b8; margin-bottom: 16px; line-height: 1.35; }
     .card {
       background: #111827;
@@ -44,7 +44,6 @@
     .readonly { background: #020617; color: #9ca3af; }
     .hint { font-size: 12px; color: #94a3b8; line-height: 1.35; margin-top: 4px; }
     .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #0b1226; border: 1px solid #334155; color: #cbd5e1; font-size: 12px; }
-    .divider { height: 1px; background: #1f2937; margin: 14px 0; }
     .hidden { display:none; }
     .errorbox{
       margin: 12px auto 0;
@@ -60,7 +59,7 @@
       white-space: pre-line;
     }
     .req{ color:#fca5a5; margin-left:6px; font-weight:600; }
-    button#submitBtn {
+    button#submitBtn, .menuBtn {
       width: 100%;
       border-radius: 999px;
       border: none;
@@ -74,10 +73,18 @@
       touch-action: manipulation;
     }
     button#submitBtn:disabled { opacity: .5; cursor: default; }
+    .menuGrid {
+      display: grid;
+      gap: 10px;
+    }
+    .menuBack {
+      background: #1f2937;
+    }
   </style>
 </head>
+
 <body>
-  <h1>Test Avto</h1>
+  <h1>Autolink</h1>
   <div class="subtitle" id="subtitle"></div>
 
   <div class="card" id="formCard"></div>
@@ -85,17 +92,13 @@
   <div class="errorbox" id="errorBox"></div>
 
 <script>
-  // ---------- Telegram ----------
   const tg = (window.Telegram && window.Telegram.WebApp) ? window.Telegram.WebApp : null;
   const urlParams = new URLSearchParams(window.location.search);
-  const formType = urlParams.get("type") || "unknown";
+  let formType = urlParams.get("type") || "";
   const APP_VERSION = urlParams.get("v") || "1";
 
-  const IS_IOS =
-    /iPad|iPhone|iPod/.test(navigator.userAgent) ||
-    (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+  const insideTelegram = !!tg;
 
-  // ---------- Service Worker ----------
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
       navigator.serviceWorker.register("./sw.js?v=" + encodeURIComponent(APP_VERSION)).catch(() => {});
@@ -103,21 +106,6 @@
   }
 
   try { if (tg) { tg.ready(); tg.expand(); } } catch (e) {}
-
-  if (tg) {
-    const setH = () => {
-      document.documentElement.style.setProperty('--app-height', (tg.viewportHeight || window.innerHeight) + 'px');
-    };
-    setH();
-    tg.onEvent('viewportChanged', setH);
-  }
-
-  function tgAlert(text) {
-    try {
-      if (tg && typeof tg.showAlert === "function") tg.showAlert(String(text));
-      else alert(String(text));
-    } catch(e) { alert(String(text)); }
-  }
 
   const subtitleEl = document.getElementById("subtitle");
   const formCard = document.getElementById("formCard");
@@ -131,22 +119,12 @@
     try { errorBox.scrollIntoView({behavior:"smooth", block:"start"}); } catch(e){}
   }
 
-  // ---------- URL lists ----------
-  const brandsParam = urlParams.get("brands") || "";
-  const sourcesParam = urlParams.get("sources") || "";
-  const managersParam = urlParams.get("managers") || "";
-  const ownersParam = urlParams.get("owners") || "";
-  const expenseArticlesParam = urlParams.get("expense_articles") || "";
-  const incomeArticlesParam = urlParams.get("income_articles") || "";
-  const vinsParam = urlParams.get("vins") || ""; // на будущее / если добавишь в Python
-
-  const brands = brandsParam ? brandsParam.split("|") : [];
-  const sources = sourcesParam ? sourcesParam.split("|") : [];
-  const managers = managersParam ? managersParam.split("|") : [];
-  const owners = ownersParam ? ownersParam.split("|") : [];
-  const expenseArticles = expenseArticlesParam ? expenseArticlesParam.split("|") : [];
-  const incomeArticles = incomeArticlesParam ? incomeArticlesParam.split("|") : [];
-  const vinsFromUrl = vinsParam ? vinsParam.split("|") : [];
+  function tgAlert(text) {
+    try {
+      if (insideTelegram && typeof tg.showAlert === "function") tg.showAlert(String(text));
+      else alert(String(text));
+    } catch(e) { alert(String(text)); }
+  }
 
   const FORM_TITLES = {
     mgr_stock: "Сток",
@@ -162,7 +140,38 @@
     record_edit: "Исправление записи",
   };
 
-  subtitleEl.textContent = "Форма: " + (FORM_TITLES[formType] || formType);
+  // ---------- refs ----------
+  let refs = {
+    manager: [],
+    source: [],
+    owner: [],
+    brand_model: [],
+    expense_article: [],
+    income_article: [],
+    vin: []
+  };
+
+  function urlList(name){
+    const v = urlParams.get(name) || "";
+    return v ? v.split("|").filter(Boolean) : [];
+  }
+
+  refs.manager = urlList("managers");
+  refs.source = urlList("sources");
+  refs.owner = urlList("owners");
+  refs.brand_model = urlList("brands");
+  refs.expense_article = urlList("expense_articles");
+  refs.income_article = urlList("income_articles");
+  refs.vin = urlList("vins");
+
+  async function loadStandaloneBootstrap(){
+    if (insideTelegram || formType) return;
+    try{
+      const res = await fetch("/api/bootstrap");
+      const data = await res.json();
+      if (data && data.ok && data.refs) refs = data.refs;
+    }catch(e){}
+  }
 
   // ---------- helpers ----------
   function todayISO() { return new Date().toISOString().slice(0, 10); }
@@ -206,44 +215,29 @@
     return out;
   }
 
-  function mergeUnique(...arrays){ return uniq(arrays.flat()); }
-
   // ---------- localStorage ----------
   const LS_KEYS = {
-    VINS: "testavto_vins",
-    MANAGER: "testavto_last_manager",
-    SOURCE: "testavto_last_source",
-    OWNER: "testavto_last_owner",
-    EXP_ARTICLE: "testavto_last_exp_article",
-    INCOME_ARTICLE: "testavto_last_income_article",
-    SCHEMA: "testavto_schema_v2"
+    MANAGER: "autolink_last_manager",
+    SOURCE: "autolink_last_source",
+    OWNER: "autolink_last_owner",
+    EXPENSE_ARTICLE: "autolink_last_expense_article",
+    INCOME_ARTICLE: "autolink_last_income_article",
   };
 
-  function lsRead(key, fallback){
-    try{
-      const v = localStorage.getItem(key);
-      if (v===null || v===undefined || v==="") return fallback;
-      return JSON.parse(v);
-    }catch(e){ return fallback; }
+  function rememberField(id, lsKey) {
+    const el = document.getElementById(id);
+    if (!el) return;
+    try {
+      const saved = localStorage.getItem(lsKey);
+      if (!el.value && saved) el.value = saved;
+    } catch (e) {}
+    el.addEventListener("input", () => {
+      try { localStorage.setItem(lsKey, el.value || ""); } catch (e) {}
+    });
+    el.addEventListener("change", () => {
+      try { localStorage.setItem(lsKey, el.value || ""); } catch (e) {}
+    });
   }
-
-  function lsWrite(key, value){
-    try{ localStorage.setItem(key, JSON.stringify(value)); }catch(e){}
-  }
-
-  function lsReadArr(key){
-    const a=lsRead(key, []);
-    return Array.isArray(a)?a.filter(Boolean):[];
-  }
-
-  function lsWriteArr(key, arr, max=4000){
-    lsWrite(key, (Array.isArray(arr)?arr:[]).filter(Boolean).slice(0,max));
-  }
-
-
-  function getAllVins() {
-  return uniq((vinsFromUrl || []).map(v => normalizeVin(v)).filter(Boolean));
-}
 
   // ---------- datalist ----------
   function updateDatalist(dlId, options) {
@@ -357,16 +351,13 @@
     i.placeholder = placeholder;
     const dlId = id + "_list";
     i.setAttribute("list", dlId);
-
     let dl = document.getElementById(dlId);
     if (!dl) {
       dl = document.createElement("datalist");
       dl.id = dlId;
       document.body.appendChild(dl);
     }
-
     updateDatalist(dlId, options);
-
     if (required) i.dataset.required = "1";
     w.appendChild(l);
     w.appendChild(i);
@@ -416,10 +407,6 @@
     return result;
   }
 
-  function formatWithSpaces(numStr){
-    return normalizeMoneyString(numStr);
-  }
-
   function setupMoneyInput(id){
     const el = document.getElementById(id);
     if (!el || el.dataset.money === "1") return;
@@ -427,14 +414,9 @@
 
     const formatNow = () => {
       const raw = el.value;
-      const formatted = formatWithSpaces(raw);
+      const formatted = normalizeMoneyString(raw);
       el.value = (formatted === "-" ? "" : formatted);
     };
-
-    if (IS_IOS) {
-      el.addEventListener("blur", formatNow);
-      return;
-    }
 
     const onInput = () => {
       const raw = el.value;
@@ -446,7 +428,7 @@
       const start = el.selectionStart || 0;
       const beforeDigits = digitsOnly(raw.slice(0, start)).length;
 
-      const formatted = formatWithSpaces(raw);
+      const formatted = normalizeMoneyString(raw);
       el.value = (formatted === "-" ? "" : formatted);
 
       let pos = 0;
@@ -463,7 +445,11 @@
   }
 
   // ---------- VIN autocomplete ----------
-  function setupVinAutocompleteSmart(inputId, getAllVinsFn) {
+  function getAllVins() {
+    return uniq((refs.vin || []).map(v => normalizeVin(v)).filter(Boolean));
+  }
+
+  function setupVinAutocompleteSmart(inputId) {
     const input = document.getElementById(inputId);
     if (!input) return;
     if (input.dataset && input.dataset.vinAuto === "1") return;
@@ -486,7 +472,7 @@
       const f = raw.toLowerCase();
 
       dl.innerHTML = "";
-      const source = (typeof getAllVinsFn === "function") ? getAllVinsFn() : [];
+      const source = getAllVins();
       const out = [];
 
       for (let i = 0; i < source.length; i++) {
@@ -522,14 +508,12 @@
     return lab.textContent.replace("*","").trim();
   }
 
-  function validateVisibleRequired(optionalIds = []) {
-    const opt = new Set(optionalIds || []);
+  function validateVisibleRequired() {
     const missing = [];
     const controls = formCard.querySelectorAll("input, select, textarea");
 
     controls.forEach(el=>{
       if (!el.id) return;
-      if (opt.has(el.id)) return;
       const requiredFlag = el.dataset.required === "1";
       if (!requiredFlag) return;
       if (isFieldHidden(el)) return;
@@ -588,29 +572,105 @@
   }
 
   function validateBeforeSubmit() {
-    if (!validateVisibleRequired([])) return false;
+    if (!validateVisibleRequired()) return false;
     if (!validateSaleScenario()) return false;
     return true;
   }
 
-  // ---------- remember field ----------
-  function rememberField(id, lsKey, fallback = "") {
-    const el = document.getElementById(id);
-    if (!el) return;
-    try {
-      const saved = localStorage.getItem(lsKey);
-      if (!el.value && saved) el.value = saved;
-      if (!el.value && fallback) el.value = fallback;
-    } catch (e) {}
-    el.addEventListener("input", () => {
-      try { localStorage.setItem(lsKey, el.value || ""); } catch (e) {}
-    });
-    el.addEventListener("change", () => {
-      try { localStorage.setItem(lsKey, el.value || ""); } catch (e) {}
+  // ---------- standalone menus ----------
+  function renderHomeMenu(){
+    subtitleEl.textContent = "Выбери раздел";
+    formCard.innerHTML = `
+      <div class="menuGrid">
+        <button class="menuBtn" data-open="manager_menu">👔 Менеджер</button>
+        <button class="menuBtn" data-open="finance_menu">💰 Финансист</button>
+        <button class="menuBtn" data-open="other_menu">⚙️ Прочее</button>
+      </div>
+    `;
+    submitBtn.style.display = "none";
+
+    formCard.querySelectorAll("[data-open]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        const x = btn.getAttribute("data-open");
+        if (x === "manager_menu") return renderStandaloneManagerMenu();
+        if (x === "finance_menu") return renderStandaloneFinanceMenu();
+        if (x === "other_menu") return renderStandaloneOtherMenu();
+      });
     });
   }
 
-  // ---------- render forms ----------
+  function renderStandaloneManagerMenu(){
+    subtitleEl.textContent = "Менеджер";
+    formCard.innerHTML = `
+      <div class="menuGrid">
+        <button class="menuBtn" data-form="mgr_stock">📦 Сток</button>
+        <button class="menuBtn" data-form="sale_main">💵 Продажа</button>
+        <button class="menuBtn" data-form="sale_deposit">🤝 Задаток</button>
+        <button class="menuBtn" data-form="deposit_status">🟢 Статус задатка</button>
+        <button class="menuBtn" data-form="sale_extra">🧩 Доп. услуги</button>
+        <button class="menuBtn menuBack" id="backBtn">⬅️ Назад</button>
+      </div>
+    `;
+    submitBtn.style.display = "none";
+
+    formCard.querySelectorAll("[data-form]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        formType = btn.getAttribute("data-form");
+        subtitleEl.textContent = "Форма: " + (FORM_TITLES[formType] || formType);
+        renderForm();
+      });
+    });
+
+    document.getElementById("backBtn").addEventListener("click", renderHomeMenu);
+  }
+
+  function renderStandaloneFinanceMenu(){
+    subtitleEl.textContent = "Финансист";
+    formCard.innerHTML = `
+      <div class="menuGrid">
+        <button class="menuBtn" data-form="fin_auto_template">🚗 Расходы авто РФ</button>
+        <button class="menuBtn" data-form="fin_company">🏢 Расходы компании</button>
+        <button class="menuBtn" data-form="fin_other_income">➕ Прочие доходы</button>
+        <button class="menuBtn menuBack" id="backBtn">⬅️ Назад</button>
+      </div>
+    `;
+    submitBtn.style.display = "none";
+
+    formCard.querySelectorAll("[data-form]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        formType = btn.getAttribute("data-form");
+        subtitleEl.textContent = "Форма: " + (FORM_TITLES[formType] || formType);
+        renderForm();
+      });
+    });
+
+    document.getElementById("backBtn").addEventListener("click", renderHomeMenu);
+  }
+
+  function renderStandaloneOtherMenu(){
+    subtitleEl.textContent = "Прочее";
+    formCard.innerHTML = `
+      <div class="menuGrid">
+        <button class="menuBtn" data-form="refs_manage">📚 Справочники</button>
+        <button class="menuBtn" data-form="record_find">🔎 Поиск записи</button>
+        <button class="menuBtn" data-form="record_edit">✏️ Исправление записи</button>
+        <button class="menuBtn menuBack" id="backBtn">⬅️ Назад</button>
+      </div>
+    `;
+    submitBtn.style.display = "none";
+
+    formCard.querySelectorAll("[data-form]").forEach(btn=>{
+      btn.addEventListener("click", ()=>{
+        formType = btn.getAttribute("data-form");
+        subtitleEl.textContent = "Форма: " + (FORM_TITLES[formType] || formType);
+        renderForm();
+      });
+    });
+
+    document.getElementById("backBtn").addEventListener("click", renderHomeMenu);
+  }
+
+  // ---------- form render ----------
   function renderForm() {
     formCard.innerHTML = "";
     submitBtn.disabled = true;
@@ -624,9 +684,9 @@
         {value:"Поставка", label:"Поставка"},
       ], "Выберите тип сделки", true));
 
-      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
-      formCard.appendChild(createAutocompleteInput("ownerInput", "Собственник", "Начни вводить", owners, true));
-      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", refs.manager, true));
+      formCard.appendChild(createAutocompleteInput("ownerInput", "Собственник", "Начни вводить", refs.owner, true));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", refs.brand_model, true));
       formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
       formCard.appendChild(createInput("configInput", "Комплектация", "", "", "text", false, true));
       formCard.appendChild(createInput("bodyColorInput", "Цвет кузова", "", "", "text", false, true));
@@ -640,10 +700,10 @@
       ], "Выберите тип оплаты", true));
       formCard.appendChild(createInput("clientInput", "Клиент", "", "", "text", false, true));
 
-      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupVinAutocompleteSmart("vinInput");
       setupMoneyInput("priceInput");
-      rememberField("managerInput", LS_KEYS.MANAGER, "");
-      rememberField("ownerInput", LS_KEYS.OWNER, "");
+      rememberField("managerInput", LS_KEYS.MANAGER);
+      rememberField("ownerInput", LS_KEYS.OWNER);
 
       submitBtn.disabled = false;
       return;
@@ -655,28 +715,28 @@
     }
 
     if (formType === "sale_deposit") {
-      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
+      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", refs.manager, true));
       formCard.appendChild(createInput("saleDateInput", "Дата", "", todayISO(), "date", false, true));
-      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", refs.brand_model, true));
       formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
-      formCard.appendChild(createAutocompleteInput("leadSourceInput", "Источник", "Начни вводить", sources, true));
+      formCard.appendChild(createAutocompleteInput("leadSourceInput", "Источник", "Начни вводить", refs.source, true));
       formCard.appendChild(createInput("depositSumInput", "Сумма задатка", "", "", "text", false, true));
       formCard.appendChild(createInput("receiverInput", "Кому передана сумма", "", "", "text", false, true));
       formCard.appendChild(createInput("priceInput", "Цена продажи", "", "", "text", false, true));
       formCard.appendChild(createInput("buyerInput", "Покупатель (необязательно)", "", "", "text", false, false));
 
-      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupVinAutocompleteSmart("vinInput");
       setupMoneyInput("depositSumInput");
       setupMoneyInput("priceInput");
-      rememberField("managerInput", LS_KEYS.MANAGER, "");
-      rememberField("leadSourceInput", LS_KEYS.SOURCE, "");
+      rememberField("managerInput", LS_KEYS.MANAGER);
+      rememberField("leadSourceInput", LS_KEYS.SOURCE);
 
       submitBtn.disabled = false;
       return;
     }
 
     if (formType === "deposit_status") {
-      formCard.appendChild(createInput("recordIdInput", "ID записи задатка", "Например: sale_deposit_ab12cd34", "", "text", false, true));
+      formCard.appendChild(createInput("recordIdInput", "ID записи задатка", "Например: ZD-0704-1234", "", "text", false, true));
       formCard.appendChild(createSelectKV("statusInput", "Новый статус", [
         {value:"Зачтён", label:"✅ Зачтён"},
         {value:"Возврат", label:"↩️ Возврат"},
@@ -688,9 +748,9 @@
     }
 
     if (formType === "sale_extra") {
-      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
+      formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", refs.manager, true));
       formCard.appendChild(createInput("saleDateInput", "Дата", "", todayISO(), "date", false, true));
-      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", refs.brand_model, true));
       formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
       formCard.appendChild(createTextarea("extraDescInput", "Доп. услуги (описание) (необязательно)", "", false, false));
       formCard.appendChild(createInput("priceInput", "Цена продажи", "", "", "text", false, true));
@@ -699,20 +759,37 @@
       formCard.appendChild(createInput("buyPriceInput", "Цена покупки", "", "", "text", false, true));
       formCard.appendChild(createInput("profitInput", "Доход", "Авторасчёт (можно изменить)", "", "text", false, true));
 
-      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupVinAutocompleteSmart("vinInput");
       setupMoneyInput("priceInput");
       setupMoneyInput("buyPriceInput");
       setupMoneyInput("profitInput");
-      setupAutoProfit();
-      rememberField("managerInput", LS_KEYS.MANAGER, "");
 
+      const priceEl = () => document.getElementById("priceInput");
+      const buyEl = () => document.getElementById("buyPriceInput");
+      const profitEl = () => document.getElementById("profitInput");
+
+      let manual = false;
+      profitEl().addEventListener("input", ()=>{ manual=true; });
+
+      const recalc = () => {
+        if (manual) return;
+        const p = parseFloat((priceEl().value || "").replace(/\s/g,'').replace(',','.')) || 0;
+        const b = parseFloat((buyEl().value || "").replace(/\s/g,'').replace(',','.')) || 0;
+        if (!p && !b) return;
+        profitEl().value = normalizeMoneyString(String(Math.round(p - b)));
+      };
+
+      priceEl().addEventListener("input", recalc);
+      buyEl().addEventListener("input", recalc);
+
+      rememberField("managerInput", LS_KEYS.MANAGER);
       submitBtn.disabled = false;
       return;
     }
 
     if (formType === "fin_auto_template") {
       formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, false));
-      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, false));
+      formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", refs.brand_model, false));
       formCard.appendChild(createInput("faDateInput", "Дата", "", todayISO(), "date", false, true));
       formCard.appendChild(createInput("evacuatorInput", "Эвакуатор", "", "", "text", false, false));
       formCard.appendChild(createInput("labInput", "Лаборатория", "", "", "text", false, false));
@@ -724,7 +801,7 @@
       formCard.appendChild(createTextarea("extraExpensesInput", "Доп. расходы", "Если есть — строками", false, false));
       formCard.appendChild(createTextarea("commentInput", "Комментарий", "", false, false));
 
-      setupVinAutocompleteSmart("vinInput", getAllVins);
+      setupVinAutocompleteSmart("vinInput");
       ["evacuatorInput","labInput","utilWriteoffInput","utilInput","preSaleInput","marketingInput","otherInput"].forEach(setupMoneyInput);
 
       submitBtn.disabled = false;
@@ -733,24 +810,24 @@
 
     if (formType === "fin_company") {
       formCard.appendChild(createInput("opDateInput", "Дата", "", todayISO(), "date", false, true));
-      formCard.appendChild(createAutocompleteInput("expenseArticleInput", "Статья расхода", "Начни вводить", expenseArticles, true));
+      formCard.appendChild(createAutocompleteInput("expenseArticleInput", "Статья расхода", "Начни вводить", refs.expense_article, true));
       formCard.appendChild(createInput("amountInput", "Сумма, ₽", "", "", "text", false, true));
       formCard.appendChild(createTextarea("commentInput", "Комментарий", "", false, false));
 
       setupMoneyInput("amountInput");
-      rememberField("expenseArticleInput", LS_KEYS.EXP_ARTICLE, "");
+      rememberField("expenseArticleInput", LS_KEYS.EXPENSE_ARTICLE);
       submitBtn.disabled = false;
       return;
     }
 
     if (formType === "fin_other_income") {
       formCard.appendChild(createInput("incomeDateInput", "Дата", "", todayISO(), "date", false, true));
-      formCard.appendChild(createAutocompleteInput("incomeArticleInput", "Статья дохода", "Начни вводить", incomeArticles, true));
+      formCard.appendChild(createAutocompleteInput("incomeArticleInput", "Статья дохода", "Начни вводить", refs.income_article, true));
       formCard.appendChild(createInput("incomeAmountInput", "Сумма, ₽", "", "", "text", false, true));
       formCard.appendChild(createTextarea("incomeCommentInput", "Комментарий", "", false, false));
 
       setupMoneyInput("incomeAmountInput");
-      rememberField("incomeArticleInput", LS_KEYS.INCOME_ARTICLE, "");
+      rememberField("incomeArticleInput", LS_KEYS.INCOME_ARTICLE);
       submitBtn.disabled = false;
       return;
     }
@@ -777,7 +854,7 @@
 
       const hint = document.createElement("div");
       hint.className = "hint";
-      hint.textContent = "VIN лучше тоже можно добавлять сюда списком, а потом мы подтянем VIN ещё и из рабочих листов.";
+      hint.textContent = "VIN в подсказках берутся только из справочника.";
       formCard.appendChild(hint);
 
       submitBtn.disabled = false;
@@ -819,7 +896,7 @@
       formCard.appendChild(createInput("editManagerInput", "Менеджер", "", "", "text", false, false));
       formCard.appendChild(createInput("editOwnerInput", "Собственник", "", "", "text", false, false));
       formCard.appendChild(createInput("editSaleDateInput", "Дата продажи", "", "", "date", false, false));
-      formCard.appendChild(createInput("editStockDateInput", "Дата стока", "", "", "date", false, false));
+      formCard.appendChild(createInput("editStockDateInput", "Дата", "", "", "date", false, false));
       formCard.appendChild(createInput("editOpDateInput", "Дата операции", "", "", "date", false, false));
       formCard.appendChild(createInput("editBrandInput", "Марка / Модель", "", "", "text", false, false));
       formCard.appendChild(createInput("editVinInput", "VIN", "", "", "text", false, false));
@@ -842,16 +919,16 @@
       return;
     }
 
-    formCard.appendChild(createTextarea("rawInput", "Данные", "Форма не настроена.", false, true));
-    submitBtn.disabled = false;
+    formCard.innerHTML = `<div class="hint">Форма не выбрана.</div>`;
+    submitBtn.style.display = "none";
   }
 
   // ---------- dynamic sale form ----------
   function renderSaleMain() {
     formCard.innerHTML = "";
 
-    formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", managers, true));
-    formCard.appendChild(createAutocompleteInput("ownerInput", "Собственник", "Начни вводить", owners, true));
+    formCard.appendChild(createAutocompleteInput("managerInput","Менеджер", "Начни вводить", refs.manager, true));
+    formCard.appendChild(createAutocompleteInput("ownerInput", "Собственник", "Начни вводить", refs.owner, true));
 
     const payWrap = createSelectKV("salePaymentTypeInput", "Оплата", [
       {value:"cash", label:"Нал"},
@@ -878,9 +955,9 @@
     formCard.appendChild(badge);
 
     formCard.appendChild(createInput("saleDateInput", "Дата продажи", "", todayISO(), "date", false, true));
-    formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", brands, true));
+    formCard.appendChild(createAutocompleteInput("brandModelInput", "Марка / Модель", "Начни вводить", refs.brand_model, true));
     formCard.appendChild(createInput("vinInput", "VIN", "Например: 1457 или полный VIN", "", "text", false, true));
-    formCard.appendChild(createAutocompleteInput("leadSourceInput", "Источник", "Начни вводить", sources, true));
+    formCard.appendChild(createAutocompleteInput("leadSourceInput", "Источник", "Начни вводить", refs.source, true));
 
     const buyerWrap = createInput("buyerInput", "Покупатель (необязательно)", "", "", "text", false, false);
     const receiverWrap = createInput("receiverInput", "Получатель (необязательно)", "", "", "text", false, false);
@@ -971,44 +1048,12 @@
     document.getElementById("saleCommissionInput").addEventListener("change", updateSaleMainVisibility);
     updateSaleMainVisibility();
 
-    setupVinAutocompleteSmart("vinInput", getAllVins);
-    rememberField("managerInput", LS_KEYS.MANAGER, "");
-    rememberField("ownerInput", LS_KEYS.OWNER, "");
-    rememberField("leadSourceInput", LS_KEYS.SOURCE, "");
+    setupVinAutocompleteSmart("vinInput");
+    rememberField("managerInput", LS_KEYS.MANAGER);
+    rememberField("ownerInput", LS_KEYS.OWNER);
+    rememberField("leadSourceInput", LS_KEYS.SOURCE);
 
     submitBtn.disabled = false;
-  }
-
-  // ---------- auto profit ----------
-  function toNum(v){
-    const s = String(v || "")
-      .replace(/\s/g, "")
-      .replace(",", ".")
-      .replace(/[^\d.\-]/g, "");
-    const n = parseFloat(s);
-    return Number.isFinite(n) ? n : 0;
-  }
-
-  function setupAutoProfit(){
-    const priceEl = document.getElementById("priceInput");
-    const buyEl = document.getElementById("buyPriceInput");
-    const profitEl = document.getElementById("profitInput");
-    if (!priceEl || !buyEl || !profitEl) return;
-
-    let manual = false;
-    profitEl.addEventListener("input", ()=>{ manual=true; });
-
-    const recalc = () => {
-      if (manual) return;
-      const p = toNum(priceEl.value);
-      const b = toNum(buyEl.value);
-      if (!p && !b) return;
-      const diff = p - b;
-      profitEl.value = formatWithSpaces(String(Math.round(diff)));
-    };
-
-    priceEl.addEventListener("input", recalc);
-    buyEl.addEventListener("input", recalc);
   }
 
   // ---------- collect ----------
@@ -1203,42 +1248,35 @@
       };
     }
 
-    return { action: "create", formType, raw: document.getElementById("rawInput")?.value || "" };
+    return { action: "create", formType };
   }
 
-  // ---------- Init ----------
-  renderForm();
+  // ---------- submit ----------
+  async function submitStandalone(payload){
+    const actor = prompt("Введите имя сотрудника", "") || "Standalone Web";
+    payload.actor = actor;
 
-  let _touchLock = false;
-  submitBtn.addEventListener("touchend", (e) => {
-    if (_touchLock) return;
-    _touchLock = true;
-    e.preventDefault();
-    submitBtn.click();
-    setTimeout(() => { _touchLock = false; }, 400);
-  }, { passive: false });
+    const res = await fetch("/api/submit", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify(payload)
+    });
 
-  // ---------- Submit ----------
+    const data = await res.json();
+    if (!data.ok) throw new Error(data.error || "Ошибка");
+    return data;
+  }
+
   submitBtn.addEventListener("click", async () => {
     try { document.activeElement?.blur?.(); } catch(e) {}
     showError("");
 
     if (!validateBeforeSubmit()) return;
 
-    const tgNow = window.Telegram?.WebApp;
-    if (!tgNow) {
-      alert("Открой форму через кнопку в Telegram-боте.");
-      return;
-    }
-
     const payload = collectFormData();
-
-    try {
-      if (payload && payload.vin) rememberVin(payload.vin);
-    } catch(e){}
-
     const dataStr = JSON.stringify(payload);
-    if (dataStr.length > 3800) {
+
+    if (dataStr.length > 3800 && insideTelegram) {
       tgAlert("Слишком много текста для Telegram. Сократи комментарии и отправь ещё раз.");
       return;
     }
@@ -1247,14 +1285,34 @@
     submitBtn.textContent = "Отправка...";
 
     try {
-      tgNow.sendData(dataStr);
-      setTimeout(() => { try { tgNow.close(); } catch(e) {} }, 650);
+      if (insideTelegram && tg?.sendData) {
+        tg.sendData(dataStr);
+        setTimeout(() => { try { tg.close(); } catch(e) {} }, 650);
+      } else {
+        const data = await submitStandalone(payload);
+        tgAlert(data.message || "Готово");
+        submitBtn.disabled = false;
+        submitBtn.textContent = "Отправить";
+      }
     } catch (e) {
-      tgAlert("Не удалось отправить данные. Попробуй ещё раз.");
+      showError("Не удалось отправить данные. " + (e?.message || ""));
       submitBtn.disabled = false;
       submitBtn.textContent = "Отправить";
     }
   });
+
+  // ---------- init ----------
+  (async function init(){
+    await loadStandaloneBootstrap();
+
+    if (!formType && !insideTelegram) {
+      renderHomeMenu();
+      return;
+    }
+
+    subtitleEl.textContent = "Форма: " + (FORM_TITLES[formType] || formType);
+    renderForm();
+  })();
 </script>
 </body>
 </html>
