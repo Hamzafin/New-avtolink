@@ -24,7 +24,7 @@
       border-radius: 16px;
       padding: 16px;
       box-shadow: 0 10px 25px rgba(0,0,0,0.5);
-      max-width: 760px;
+      max-width: 820px;
       margin: 0 auto;
     }
     .field { margin-bottom: 12px; display: flex; flex-direction: column; gap: 4px; }
@@ -43,11 +43,19 @@
     textarea { min-height: 90px; resize: vertical; }
     .readonly { background: #020617; color: #9ca3af; }
     .hint { font-size: 12px; color: #94a3b8; line-height: 1.35; margin-top: 4px; }
-    .pill { display: inline-block; padding: 6px 10px; border-radius: 999px; background: #0b1226; border: 1px solid #334155; color: #cbd5e1; font-size: 12px; }
+    .pill {
+      display: inline-block;
+      padding: 6px 10px;
+      border-radius: 999px;
+      background: #0b1226;
+      border: 1px solid #334155;
+      color: #cbd5e1;
+      font-size: 12px;
+    }
     .hidden { display:none; }
     .errorbox{
       margin: 12px auto 0;
-      max-width: 760px;
+      max-width: 820px;
       background:#0b1226;
       border:1px solid #ef4444;
       color:#fecaca;
@@ -73,12 +81,37 @@
       touch-action: manipulation;
     }
     button#submitBtn:disabled { opacity: .5; cursor: default; }
-    .menuGrid {
-      display: grid;
-      gap: 10px;
+    .menuGrid { display: grid; gap: 10px; }
+    .menuBack { background: #1f2937; }
+    .previewBox{
+      background:#0b1226;
+      border:1px solid #334155;
+      border-radius:14px;
+      padding:10px 12px;
+      margin-bottom:12px;
     }
-    .menuBack {
-      background: #1f2937;
+    .previewTitle{
+      font-size:13px;
+      color:#cbd5e1;
+      margin-bottom:6px;
+      font-weight:700;
+    }
+    .previewText{
+      font-size:12px;
+      color:#94a3b8;
+      line-height:1.4;
+      white-space:pre-wrap;
+      word-break:break-word;
+      max-height:160px;
+      overflow:auto;
+    }
+    .row2{
+      display:grid;
+      grid-template-columns:1fr 1fr;
+      gap:10px;
+    }
+    @media (max-width: 720px){
+      .row2{ grid-template-columns:1fr; }
     }
   </style>
 </head>
@@ -113,7 +146,11 @@
   const errorBox = document.getElementById("errorBox");
 
   function showError(msg){
-    if (!msg) { errorBox.style.display="none"; errorBox.textContent=""; return; }
+    if (!msg) {
+      errorBox.style.display="none";
+      errorBox.textContent="";
+      return;
+    }
     errorBox.textContent = msg;
     errorBox.style.display="block";
     try { errorBox.scrollIntoView({behavior:"smooth", block:"start"}); } catch(e){}
@@ -140,7 +177,6 @@
     record_edit: "Исправление записи",
   };
 
-  // ---------- refs ----------
   let refs = {
     manager: [],
     source: [],
@@ -173,7 +209,6 @@
     }catch(e){}
   }
 
-  // ---------- helpers ----------
   function todayISO() { return new Date().toISOString().slice(0, 10); }
 
   function formatDateToRu(value) {
@@ -215,7 +250,6 @@
     return out;
   }
 
-  // ---------- localStorage ----------
   const LS_KEYS = {
     MANAGER: "autolink_last_manager",
     SOURCE: "autolink_last_source",
@@ -239,12 +273,11 @@
     });
   }
 
-  // ---------- datalist ----------
   function updateDatalist(dlId, options) {
     const dl = document.getElementById(dlId);
     if (!dl) return;
     dl.innerHTML = "";
-    (options || []).slice(0, 800).forEach((opt) => {
+    (options || []).slice(0, 1500).forEach((opt) => {
       const o = document.createElement("option");
       o.value = opt;
       dl.appendChild(o);
@@ -364,7 +397,20 @@
     return w;
   }
 
-  // ---------- money formatting ----------
+  function createPreviewBox(title, arr){
+    const box = document.createElement("div");
+    box.className = "previewBox";
+    const t = document.createElement("div");
+    t.className = "previewTitle";
+    t.textContent = title;
+    const tx = document.createElement("div");
+    tx.className = "previewText";
+    tx.textContent = (arr && arr.length) ? arr.join(", ") : "Пока пусто";
+    box.appendChild(t);
+    box.appendChild(tx);
+    return box;
+  }
+
   function digitsOnly(s){ return String(s||"").replace(/[^\d]/g, ""); }
 
   function normalizeMoneyString(raw) {
@@ -444,7 +490,6 @@
     el.addEventListener("blur", formatNow);
   }
 
-  // ---------- VIN autocomplete ----------
   function getAllVins() {
     return uniq((refs.vin || []).map(v => normalizeVin(v)).filter(Boolean));
   }
@@ -493,7 +538,6 @@
     input.addEventListener("input", () => fill(input.value));
   }
 
-  // ---------- validation ----------
   function isFieldHidden(el){
     if (!el) return true;
     const field = el.closest(".field");
@@ -577,7 +621,6 @@
     return true;
   }
 
-  // ---------- standalone menus ----------
   function renderHomeMenu(){
     subtitleEl.textContent = "Выбери раздел";
     formCard.innerHTML = `
@@ -670,7 +713,6 @@
     document.getElementById("backBtn").addEventListener("click", renderHomeMenu);
   }
 
-  // ---------- form render ----------
   function renderForm() {
     formCard.innerHTML = "";
     submitBtn.disabled = true;
@@ -833,6 +875,24 @@
     }
 
     if (formType === "refs_manage") {
+      const row = document.createElement("div");
+      row.className = "row2";
+      row.appendChild(createPreviewBox("Менеджеры", refs.manager));
+      row.appendChild(createPreviewBox("Источники", refs.source));
+      formCard.appendChild(row);
+
+      const row2 = document.createElement("div");
+      row2.className = "row2";
+      row2.appendChild(createPreviewBox("Собственники", refs.owner));
+      row2.appendChild(createPreviewBox("Марки / Модели", refs.brand_model));
+      formCard.appendChild(row2);
+
+      const row3 = document.createElement("div");
+      row3.className = "row2";
+      row3.appendChild(createPreviewBox("VIN", refs.vin));
+      row3.appendChild(createPreviewBox("Статьи расходов / доходов", uniq([...(refs.expense_article||[]), ...(refs.income_article||[])])));
+      formCard.appendChild(row3);
+
       formCard.appendChild(createSelectKV("refsModeInput", "Режим", [
         {value:"single", label:"Добавить одно значение"},
         {value:"bulk", label:"Добавить списком"},
@@ -851,11 +911,6 @@
 
       formCard.appendChild(createInput("refValueInput", "Одно значение", "", "", "text", false, false));
       formCard.appendChild(createTextarea("refBulkInput", "Список значений", "Каждое значение с новой строки или через запятую", false, false));
-
-      const hint = document.createElement("div");
-      hint.className = "hint";
-      hint.textContent = "VIN в подсказках берутся только из справочника.";
-      formCard.appendChild(hint);
 
       submitBtn.disabled = false;
       return;
@@ -923,7 +978,6 @@
     submitBtn.style.display = "none";
   }
 
-  // ---------- dynamic sale form ----------
   function renderSaleMain() {
     formCard.innerHTML = "";
 
@@ -964,17 +1018,17 @@
     formCard.appendChild(buyerWrap);
     formCard.appendChild(receiverWrap);
 
-    const priceCashWrap = createInput("priceCashInput", "Цена (нал)", "", "", "text", false, true);
-    const priceCashNoCommWrap = createInput("priceCashNoCommInput", "Цена без комиссии (нал)", "", "", "text", false, true);
+    const priceCashWrap = createInput("priceCashInput", "Цена", "", "", "text", false, true);
+    const priceCashNoCommWrap = createInput("priceCashNoCommInput", "Цена без комиссии", "", "", "text", false, true);
 
-    const priceCashlessWrap = createInput("priceCashlessInput", "Сумма (безнал, без НДС)", "", "", "text", false, true);
-    const priceNdsWrap = createInput("priceNdsInput", "Цена с НДС", "", "", "text", false, true);
-    const markupNdsWrap = createInput("markupNdsInput", "Наценка НДС (% / руб)", "", "", "text", false, true);
+    const priceCashlessWrap = createInput("priceCashlessInput", "Цена", "", "", "text", false, true);
+    const priceNdsWrap = createInput("priceNdsInput", "Цена", "", "", "text", false, true);
+    const markupNdsWrap = createInput("markupNdsInput", "Наценка НДС(% / руб.)", "", "", "text", false, true);
 
     const priceNoVatCashWrap = createInput("priceNoVatCashInput", "Цена без НДС за наличные", "", "", "text", false, true);
 
-    const contractPriceWrap = createInput("contractPriceInput", "Сумма договора", "", "", "text", false, true);
-    const brokerPriceWrap = createInput("brokerPriceInput", "Цена без комиссии брокера", "", "", "text", false, true);
+    const contractPriceWrap = createInput("contractPriceInput", "Цена в договоре", "", "", "text", false, true);
+    const brokerPriceWrap = createInput("brokerPriceInput", "Цена без комиссии", "", "", "text", false, true);
     const brokerExpenseWrap = createInput("brokerExpenseInput", "Комиссия брокера", "", "", "text", false, true);
 
     formCard.appendChild(priceCashWrap);
@@ -1007,7 +1061,7 @@
         vatSelect.disabled = false;
       }
 
-      showEl(receiverWrap, payment === "cash");
+      showEl(receiverWrap, true);
 
       showEl(priceCashWrap, payment === "cash");
       showEl(priceCashNoCommWrap, payment === "cash" && commission);
@@ -1015,6 +1069,7 @@
       showEl(priceCashlessWrap, payment === "cashless" && !vat);
       showEl(priceNdsWrap, payment === "cashless" && vat);
       showEl(markupNdsWrap, payment === "cashless" && vat);
+
       showEl(priceNoVatCashWrap, payment === "cashless" && vat);
 
       showEl(contractPriceWrap, payment === "cashless" && commission);
@@ -1056,7 +1111,6 @@
     submitBtn.disabled = false;
   }
 
-  // ---------- collect ----------
   function collectSaleMain() {
     const payment = document.getElementById("salePaymentTypeInput")?.value || "cash";
     const vatYes = (document.getElementById("saleVatInput")?.value || "no") === "yes";
@@ -1251,7 +1305,6 @@
     return { action: "create", formType };
   }
 
-  // ---------- submit ----------
   async function submitStandalone(payload){
     const actor = prompt("Введите имя сотрудника", "") || "Standalone Web";
     payload.actor = actor;
@@ -1301,7 +1354,6 @@
     }
   });
 
-  // ---------- init ----------
   (async function init(){
     await loadStandaloneBootstrap();
 
